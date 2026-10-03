@@ -1,0 +1,87 @@
+# Phase 1 configuration
+# "Zero-Shot, Few-Shot, or Retrieval-Augmented? Prompting Strategies for ICD-10 Coding with Open-Weight LLMs"
+
+seed: 42
+
+# --- Vocabulary ---
+vocab:
+  fiscal_year: "2024"
+  source_url: "https://www.cdc.gov/nchs/icd/icd-10-cm/files.html"
+  raw_dir: "data/raw"
+  vocab_path: "data/vocab/icd10cm_2024.jsonl"
+
+# --- Models ---
+models:
+  llama3:
+    model_id: "meta-llama/Meta-Llama-3-8B-Instruct"
+    context_limit: 8192
+    quantisation: "nf4"
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_use_double_quant: true
+    bnb_4bit_quant_type: "nf4"
+    stop_tokens: ["<|eot_id|>"]
+    template_mode: "system"  # LLaMA-3 supports system role
+  biomistral:
+    model_id: "BioMistral/BioMistral-7B"
+    context_limit: 2048
+    quantisation: "nf4"
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_use_double_quant: true
+    bnb_4bit_quant_type: "nf4"
+    stop_tokens: []
+    template_mode: "prepend"  # Mistral rejects system role
+
+# --- Strategies ---
+strategies:
+  zero_shot:
+    type: "zero_shot"
+  few_shot:
+    type: "few_shot"
+    k: 5
+    min_implicit: 2  # at least 2 shots with implicit codes
+  rag:
+    type: "rag"
+    k: 20             # top-k retrieval candidates
+    per_query_m: 30   # per-query top-m before merge
+
+# --- Decoding ---
+decoding:
+  do_sample: false
+  max_new_tokens: 256
+  batch_size: 1
+
+# --- Retrieval ---
+retrieval:
+  embedder: "sentence-transformers/all-MiniLM-L6-v2"
+  embedding_format: "{code}: {long_desc}"
+  index_dir: "data/index"
+  note_window_words: 150
+  note_window_overlap: 30
+
+# --- Data ---
+data:
+  synthetic_dir: "data/synthetic"
+  n_eval: 200
+  n_fewshot_pool: 50
+  n_dev: 30
+  implicit_rate: 0.45
+  max_words: 200
+  conditions_per_record_min: 3
+  conditions_per_record_max: 6
+  distractors_per_record_min: 1
+  distractors_per_record_max: 3
+
+# --- Overflow ---
+overflow_policy: "truncate_record"
+section_priority:
+  - "Discharge Diagnosis"
+  - "Brief Hospital Course"
+  - "Chief Complaint"
+  - "History of Present Illness"
+  - "Past Medical History"
+
+# --- Output ---
+results_dir: "results"
+results_mock_dir: "results_mock"
+reports_dir: "reports"
+

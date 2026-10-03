@@ -1,0 +1,42 @@
+# Data
+data/raw/
+data/vocab/
+data/index/
+data/synthetic/
+data/mimic/
+
+# Results
+results/
+results_mock/
+
+# Reports (auto-generated, can be regenerated)
+reports/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Environment
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Keep small test fixtures
+!data/raw/.gitkeep
+!tests/fixtures/
+

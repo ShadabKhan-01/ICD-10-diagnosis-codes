@@ -1,0 +1,1062 @@
+- code: "E11.9"
+  explicit_phrases:
+    - "type 2 diabetes mellitus"
+    - "T2DM"
+    - "diabetes mellitus type 2"
+  implicit_signals:
+    medications:
+      - "metformin 500 mg BID"
+      - "glipizide 5 mg daily"
+    labs:
+      - "HbA1c 8.4%"
+  negation_phrases:
+    - "no history of diabetes"
+    - "denies diabetes"
+  family_history_phrases:
+    - "mother had type 2 diabetes"
+  distractor_meds:
+    - "insulin glargine 10 units daily"
+  weight: 1.0
+- code: "I10"
+  explicit_phrases:
+    - "essential hypertension"
+    - "hypertension"
+    - "HTN"
+  implicit_signals:
+    medications:
+      - "lisinopril 20 mg daily"
+      - "amlodipine 5 mg daily"
+  negation_phrases:
+    - "normotensive"
+    - "no history of hypertension"
+  family_history_phrases:
+    - "father had hypertension"
+  distractor_meds:
+    - "hydralazine 25 mg PRN"
+  weight: 1.0
+- code: "E78.5"
+  explicit_phrases:
+    - "hyperlipidemia"
+    - "high cholesterol"
+  implicit_signals:
+    medications:
+      - "atorvastatin 40 mg daily"
+      - "rosuvastatin 20 mg daily"
+    labs:
+      - "LDL 160 mg/dL"
+  negation_phrases:
+    - "normal lipid panel"
+  family_history_phrases:
+    - "family history of hyperlipidemia"
+  distractor_meds:
+    - "fenofibrate 145 mg daily"
+  weight: 1.0
+- code: "J44.9"
+  explicit_phrases:
+    - "COPD"
+    - "chronic obstructive pulmonary disease"
+  implicit_signals:
+    medications:
+      - "tiotropium bromide 18 mcg daily"
+      - "fluticasone/salmeterol 250/50 mcg BID"
+  negation_phrases:
+    - "no COPD"
+    - "clear lungs"
+  family_history_phrases:
+    - "father had COPD"
+  distractor_meds:
+  weight: 1.0
+- code: "I48.91"
+  explicit_phrases:
+    - "atrial fibrillation"
+    - "a-fib"
+  implicit_signals:
+    medications:
+      - "apixaban 5 mg BID"
+      - "rivaroxaban 20 mg daily"
+  negation_phrases:
+    - "normal sinus rhythm"
+    - "no afib"
+  family_history_phrases:
+  distractor_meds:
+    - "dabigatran 150 mg BID"
+  weight: 0.8
+- code: "E03.9"
+  explicit_phrases:
+    - "hypothyroidism"
+    - "underactive thyroid"
+  implicit_signals:
+    medications:
+      - "levothyroxine 100 mcg daily"
+    labs:
+      - "TSH 10.2 mIU/L"
+  negation_phrases:
+    - "euthyroid"
+    - "no thyroid disease"
+  family_history_phrases:
+    - "mother has hypothyroidism"
+  distractor_meds:
+    - "liothyronine 25 mcg daily"
+  weight: 0.7
+- code: "K21.9"
+  explicit_phrases:
+    - "GERD"
+    - "gastroesophageal reflux disease"
+    - "acid reflux"
+  implicit_signals:
+    medications:
+      - "omeprazole 20 mg daily"
+      - "pantoprazole 40 mg daily"
+  negation_phrases:
+    - "no heartburn"
+    - "denies GERD"
+  family_history_phrases:
+  distractor_meds:
+    - "famotidine 20 mg daily"
+  weight: 0.9
+- code: "J45.909"
+  explicit_phrases:
+    - "asthma"
+    - "uncomplicated asthma"
+  implicit_signals:
+    medications:
+      - "albuterol inhaler PRN"
+      - "budesonide 180 mcg BID"
+  negation_phrases:
+    - "no asthma"
+  family_history_phrases:
+    - "sibling with asthma"
+  distractor_meds:
+  weight: 0.8
+- code: "G47.33"
+  explicit_phrases:
+    - "obstructive sleep apnea"
+    - "OSA"
+  implicit_signals:
+    medications:
+      - "CPAP at night"
+  negation_phrases:
+    - "no sleep apnea"
+  family_history_phrases:
+  distractor_meds:
+  weight: 0.6
+- code: "I50.9"
+  explicit_phrases:
+    - "heart failure"
+    - "CHF"
+    - "congestive heart failure"
+  implicit_signals:
+    medications:
+      - "furosemide 40 mg daily"
+      - "spironolactone 25 mg daily"
+      - "entresto 49/51 mg BID"
+  negation_phrases:
+    - "no heart failure"
+  family_history_phrases:
+  distractor_meds:
+    - "bumetanide 1 mg daily"
+  weight: 0.7
+- code: "E66.9"
+  explicit_phrases:
+    - "obesity"
+    - "obese"
+  implicit_signals:
+    labs:
+      - "BMI 34"
+  negation_phrases:
+    - "normal weight"
+  family_history_phrases:
+  distractor_meds:
+    - "orlistat 120 mg TID"
+  weight: 1.0
+- code: "D64.9"
+  explicit_phrases:
+    - "anemia"
+    - "unspecified anemia"
+  implicit_signals:
+    medications:
+      - "ferrous sulfate 325 mg daily"
+    labs:
+      - "Hgb 9.2 g/dL"
+  negation_phrases:
+    - "no anemia"
+  family_history_phrases:
+  distractor_meds:
+  weight: 0.6
+- code: "E55.9"
+  explicit_phrases:
+    - "vitamin D deficiency"
+  implicit_signals:
+    medications:
+      - "cholecalciferol 50,000 IU weekly"
+    labs:
+      - "Vitamin D 12 ng/mL"
+  negation_phrases:
+    - "normal vitamin D"
+  family_history_phrases:
+  distractor_meds:
+    - "calcium carbonate 500 mg daily"
+  weight: 0.8
+- code: "M10.9"
+  explicit_phrases:
+    - "gout"
+    - "gouty arthritis"
+  implicit_signals:
+    medications:
+      - "allopurinol 300 mg daily"
+      - "colchicine 0.6 mg PRN"
+    labs:
+      - "Uric acid 8.5 mg/dL"
+  negation_phrases:
+    - "no history of gout"
+  family_history_phrases:
+  distractor_meds:
+    - "probenecid 500 mg BID"
+  weight: 0.5
+- code: "G40.909"
+  explicit_phrases:
+    - "epilepsy"
+    - "seizure disorder"
+  implicit_signals:
+    medications:
+      - "levetiracetam 500 mg BID"
+      - "lamotrigine 100 mg BID"
+  negation_phrases:
+    - "no seizures"
+  family_history_phrases:
+  distractor_meds:
+    - "phenytoin 100 mg TID"
+  weight: 0.4
+- code: "I25.10"
+  explicit_phrases:
+    - "coronary artery disease"
+    - "CAD"
+    - "ASHD"
+  implicit_signals:
+    medications:
+      - "clopidogrel 75 mg daily"
+      - "isosorbide mononitrate 30 mg daily"
+  negation_phrases:
+    - "no CAD"
+  family_history_phrases:
+    - "father had early CAD"
+  distractor_meds:
+    - "nitroglycerin 0.4 mg SL PRN"
+  weight: 0.9
+- code: "F41.9"
+  explicit_phrases:
+    - "anxiety"
+    - "anxiety disorder"
+  implicit_signals:
+    medications:
+      - "escitalopram 10 mg daily"
+      - "buspirone 15 mg BID"
+  negation_phrases:
+    - "no anxiety"
+  family_history_phrases:
+    - "mother with anxiety"
+  distractor_meds:
+    - "alprazolam 0.5 mg PRN"
+  weight: 0.8
+- code: "N39.0"
+  explicit_phrases:
+    - "urinary tract infection"
+    - "UTI"
+  implicit_signals:
+    medications:
+      - "nitrofurantoin 100 mg BID for 5 days"
+      - "trimethoprim-sulfamethoxazole DS BID for 3 days"
+    labs:
+      - "Urinalysis positive for nitrites and leukocytes"
+  negation_phrases:
+    - "no UTI"
+  family_history_phrases:
+  distractor_meds:
+    - "phenazopyridine 200 mg TID PRN"
+  weight: 0.4
+- code: "J18.9"
+  explicit_phrases:
+    - "pneumonia"
+    - "community acquired pneumonia"
+  implicit_signals:
+    medications:
+      - "azithromycin 500 mg day 1 then 250 mg daily"
+      - "amoxicillin/clavulanate 875/125 mg BID"
+  negation_phrases:
+    - "no pneumonia"
+  family_history_phrases:
+  distractor_meds:
+    - "ceftriaxone 1g IV daily"
+  weight: 0.3
+- code: "I63.9"
+  explicit_phrases:
+    - "stroke"
+    - "CVA"
+    - "cerebral infarction"
+  implicit_signals:
+    medications:
+      - "aspirin 81 mg daily"
+      - "dipyridamole/aspirin 200/25 mg BID"
+  negation_phrases:
+    - "no stroke"
+  family_history_phrases:
+    - "grandmother had stroke"
+  distractor_meds:
+    - "cilostazol 100 mg BID"
+  weight: 0.5
+- code: "E10.9"
+  explicit_phrases:
+    - "type 1 diabetes mellitus"
+    - "T1DM"
+  implicit_signals:
+    medications:
+      - "insulin lispro 5 units AC"
+    labs:
+      - "HbA1c 7.8%"
+  negation_phrases:
+    - "no history of type 1 diabetes mellitus"
+  family_history_phrases:
+    - "family history of type 1 diabetes mellitus"
+  distractor_meds:
+  weight: 0.3
+- code: "I11.9"
+  explicit_phrases:
+    - "hypertensive heart disease"
+  implicit_signals:
+    medications:
+      - "losartan 50 mg daily"
+  negation_phrases:
+    - "no history of hypertensive heart disease"
+  family_history_phrases:
+    - "family history of hypertensive heart disease"
+  distractor_meds:
+  weight: 0.4
+- code: "I27.20"
+  explicit_phrases:
+    - "pulmonary hypertension"
+  implicit_signals:
+    medications:
+      - "sildenafil 20 mg TID"
+  negation_phrases:
+    - "no history of pulmonary hypertension"
+  family_history_phrases:
+    - "family history of pulmonary hypertension"
+  distractor_meds:
+  weight: 0.1
+- code: "E78.00"
+  explicit_phrases:
+    - "pure hypercholesterolemia"
+  implicit_signals:
+    medications:
+      - "simvastatin 20 mg daily"
+  negation_phrases:
+    - "no history of pure hypercholesterolemia"
+  family_history_phrases:
+    - "family history of pure hypercholesterolemia"
+  distractor_meds:
+  weight: 0.5
+- code: "J43.9"
+  explicit_phrases:
+    - "emphysema"
+  implicit_signals:
+    medications:
+      - "umeclidinium 62.5 mcg daily"
+  negation_phrases:
+    - "no history of emphysema"
+  family_history_phrases:
+    - "family history of emphysema"
+  distractor_meds:
+  weight: 0.3
+- code: "I26.99"
+  explicit_phrases:
+    - "pulmonary embolism"
+    - "PE"
+  implicit_signals:
+    medications:
+      - "warfarin 5 mg daily"
+      - "enoxaparin 1 mg/kg BID"
+  negation_phrases:
+    - "no history of pulmonary embolism"
+  family_history_phrases:
+    - "family history of pulmonary embolism"
+  distractor_meds:
+  weight: 0.3
+- code: "J30.9"
+  explicit_phrases:
+    - "allergic rhinitis"
+    - "allergies"
+  implicit_signals:
+    medications:
+      - "fluticasone nasal spray 2 sprays daily"
+      - "cetirizine 10 mg daily"
+  negation_phrases:
+    - "no history of allergic rhinitis"
+  family_history_phrases:
+    - "family history of allergic rhinitis"
+  distractor_meds:
+  weight: 0.8
+- code: "G20"
+  explicit_phrases:
+    - "Parkinson's disease"
+  implicit_signals:
+    medications:
+      - "carbidopa/levodopa 25/100 mg TID"
+  negation_phrases:
+    - "no history of Parkinson's disease"
+  family_history_phrases:
+    - "family history of Parkinson's disease"
+  distractor_meds:
+  weight: 0.2
+- code: "G43.909"
+  explicit_phrases:
+    - "migraine"
+    - "migraine without aura"
+  implicit_signals:
+    medications:
+      - "sumatriptan 50 mg PRN"
+      - "rizatriptan 10 mg PRN"
+  negation_phrases:
+    - "no history of migraine"
+  family_history_phrases:
+    - "family history of migraine"
+  distractor_meds:
+  weight: 0.6
+- code: "G30.9"
+  explicit_phrases:
+    - "Alzheimer's disease"
+  implicit_signals:
+    medications:
+      - "donepezil 10 mg daily"
+      - "memantine 10 mg BID"
+  negation_phrases:
+    - "no history of Alzheimer's disease"
+  family_history_phrases:
+    - "family history of Alzheimer's disease"
+  distractor_meds:
+  weight: 0.2
+- code: "G35"
+  explicit_phrases:
+    - "multiple sclerosis"
+    - "MS"
+  implicit_signals:
+    medications:
+      - "glatiramer acetate 20 mg daily"
+  negation_phrases:
+    - "no history of multiple sclerosis"
+  family_history_phrases:
+    - "family history of multiple sclerosis"
+  distractor_meds:
+  weight: 0.1
+- code: "K50.90"
+  explicit_phrases:
+    - "Crohn's disease"
+  implicit_signals:
+    medications:
+      - "adalimumab 40 mg every other week"
+      - "mesalamine 800 mg TID"
+  negation_phrases:
+    - "no history of Crohn's disease"
+  family_history_phrases:
+    - "family history of Crohn's disease"
+  distractor_meds:
+  weight: 0.2
+- code: "K74.60"
+  explicit_phrases:
+    - "liver cirrhosis"
+    - "cirrhosis"
+  implicit_signals:
+    medications:
+      - "lactulose 30 mL TID"
+      - "nadolol 20 mg daily"
+  negation_phrases:
+    - "no history of liver cirrhosis"
+  family_history_phrases:
+    - "family history of liver cirrhosis"
+  distractor_meds:
+  weight: 0.2
+- code: "K85.90"
+  explicit_phrases:
+    - "acute pancreatitis"
+  implicit_signals:
+    medications:
+      - "pancrelipase 36,000 units with meals"
+  negation_phrases:
+    - "no history of acute pancreatitis"
+  family_history_phrases:
+    - "family history of acute pancreatitis"
+  distractor_meds:
+  weight: 0.1
+- code: "K25.9"
+  explicit_phrases:
+    - "gastric ulcer"
+  implicit_signals:
+    medications:
+      - "sucralfate 1 gram QID"
+  negation_phrases:
+    - "no history of gastric ulcer"
+  family_history_phrases:
+    - "family history of gastric ulcer"
+  distractor_meds:
+  weight: 0.2
+- code: "N18.3"
+  explicit_phrases:
+    - "chronic kidney disease stage 3"
+    - "CKD 3"
+  implicit_signals:
+    labs:
+      - "eGFR 45 mL/min"
+  negation_phrases:
+    - "no history of chronic kidney disease stage 3"
+  family_history_phrases:
+    - "family history of chronic kidney disease stage 3"
+  distractor_meds:
+  weight: 0.5
+- code: "N20.0"
+  explicit_phrases:
+    - "nephrolithiasis"
+    - "kidney stones"
+  implicit_signals:
+    medications:
+      - "tamsulosin 0.4 mg daily"
+  negation_phrases:
+    - "no history of nephrolithiasis"
+  family_history_phrases:
+    - "family history of nephrolithiasis"
+  distractor_meds:
+  weight: 0.3
+- code: "N18.4"
+  explicit_phrases:
+    - "chronic kidney disease stage 4"
+    - "CKD 4"
+  implicit_signals:
+    labs:
+      - "eGFR 25 mL/min"
+  negation_phrases:
+    - "no history of chronic kidney disease stage 4"
+  family_history_phrases:
+    - "family history of chronic kidney disease stage 4"
+  distractor_meds:
+  weight: 0.2
+- code: "N18.9"
+  explicit_phrases:
+    - "chronic kidney disease"
+    - "CKD"
+  implicit_signals:
+    medications:
+      - "sevelamer 800 mg TID"
+  negation_phrases:
+    - "no history of chronic kidney disease"
+  family_history_phrases:
+    - "family history of chronic kidney disease"
+  distractor_meds:
+  weight: 0.4
+- code: "E05.90"
+  explicit_phrases:
+    - "hyperthyroidism"
+  implicit_signals:
+    medications:
+      - "methimazole 5 mg daily"
+    labs:
+      - "TSH < 0.01 mIU/L"
+  negation_phrases:
+    - "no history of hyperthyroidism"
+  family_history_phrases:
+    - "family history of hyperthyroidism"
+  distractor_meds:
+  weight: 0.2
+- code: "E21.3"
+  explicit_phrases:
+    - "hyperparathyroidism"
+  implicit_signals:
+    medications:
+      - "cinacalcet 30 mg daily"
+    labs:
+      - "Calcium 10.8 mg/dL"
+  negation_phrases:
+    - "no history of hyperparathyroidism"
+  family_history_phrases:
+    - "family history of hyperparathyroidism"
+  distractor_meds:
+  weight: 0.1
+- code: "E27.40"
+  explicit_phrases:
+    - "adrenal insufficiency"
+  implicit_signals:
+    medications:
+      - "hydrocortisone 20 mg in morning and 10 mg in evening"
+  negation_phrases:
+    - "no history of adrenal insufficiency"
+  family_history_phrases:
+    - "family history of adrenal insufficiency"
+  distractor_meds:
+  weight: 0.1
+- code: "F32.9"
+  explicit_phrases:
+    - "major depressive disorder"
+    - "depression"
+  implicit_signals:
+    medications:
+      - "sertraline 50 mg daily"
+      - "fluoxetine 20 mg daily"
+  negation_phrases:
+    - "no history of major depressive disorder"
+  family_history_phrases:
+    - "family history of major depressive disorder"
+  distractor_meds:
+  weight: 0.8
+- code: "F31.9"
+  explicit_phrases:
+    - "bipolar disorder"
+  implicit_signals:
+    medications:
+      - "lithium 300 mg TID"
+      - "divalproex 500 mg BID"
+  negation_phrases:
+    - "no history of bipolar disorder"
+  family_history_phrases:
+    - "family history of bipolar disorder"
+  distractor_meds:
+  weight: 0.3
+- code: "F43.10"
+  explicit_phrases:
+    - "PTSD"
+    - "post-traumatic stress disorder"
+  implicit_signals:
+    medications:
+      - "prazosin 1 mg at bedtime"
+  negation_phrases:
+    - "no history of PTSD"
+  family_history_phrases:
+    - "family history of PTSD"
+  distractor_meds:
+  weight: 0.2
+- code: "F20.9"
+  explicit_phrases:
+    - "schizophrenia"
+  implicit_signals:
+    medications:
+      - "risperidone 2 mg daily"
+      - "olanzapine 10 mg daily"
+  negation_phrases:
+    - "no history of schizophrenia"
+  family_history_phrases:
+    - "family history of schizophrenia"
+  distractor_meds:
+  weight: 0.2
+- code: "F90.9"
+  explicit_phrases:
+    - "ADHD"
+    - "attention deficit hyperactivity disorder"
+  implicit_signals:
+    medications:
+      - "methylphenidate 10 mg BID"
+      - "lisdexamfetamine 30 mg daily"
+  negation_phrases:
+    - "no history of ADHD"
+  family_history_phrases:
+    - "family history of ADHD"
+  distractor_meds:
+  weight: 0.4
+- code: "M19.90"
+  explicit_phrases:
+    - "osteoarthritis"
+    - "OA"
+  implicit_signals:
+    medications:
+      - "meloxicam 15 mg daily"
+      - "diclofenac 1% gel PRN"
+  negation_phrases:
+    - "no history of osteoarthritis"
+  family_history_phrases:
+    - "family history of osteoarthritis"
+  distractor_meds:
+  weight: 0.7
+- code: "M81.0"
+  explicit_phrases:
+    - "osteoporosis"
+  implicit_signals:
+    medications:
+      - "alendronate 70 mg weekly"
+      - "denosumab 60 mg every 6 months"
+    labs:
+      - "T-score -2.8"
+  negation_phrases:
+    - "no history of osteoporosis"
+  family_history_phrases:
+    - "family history of osteoporosis"
+  distractor_meds:
+  weight: 0.5
+- code: "M06.9"
+  explicit_phrases:
+    - "rheumatoid arthritis"
+    - "RA"
+  implicit_signals:
+    medications:
+      - "methotrexate 15 mg weekly"
+      - "hydroxychloroquine 200 mg BID"
+  negation_phrases:
+    - "no history of rheumatoid arthritis"
+  family_history_phrases:
+    - "family history of rheumatoid arthritis"
+  distractor_meds:
+  weight: 0.3
+- code: "M54.50"
+  explicit_phrases:
+    - "low back pain"
+  implicit_signals:
+    medications:
+      - "cyclobenzaprine 5 mg PRN"
+  negation_phrases:
+    - "no history of low back pain"
+  family_history_phrases:
+    - "family history of low back pain"
+  distractor_meds:
+  weight: 0.8
+- code: "A41.9"
+  explicit_phrases:
+    - "sepsis"
+    - "septicemia"
+  implicit_signals:
+    medications:
+      - "vancomycin 1g IV Q12H"
+    labs:
+      - "Blood cultures positive"
+  negation_phrases:
+    - "no history of sepsis"
+  family_history_phrases:
+    - "family history of sepsis"
+  distractor_meds:
+  weight: 0.2
+- code: "L03.90"
+  explicit_phrases:
+    - "cellulitis"
+  implicit_signals:
+    medications:
+      - "cephalexin 500 mg QID"
+  negation_phrases:
+    - "no history of cellulitis"
+  family_history_phrases:
+    - "family history of cellulitis"
+  distractor_meds:
+  weight: 0.4
+- code: "B20"
+  explicit_phrases:
+    - "HIV"
+    - "human immunodeficiency virus"
+  implicit_signals:
+    medications:
+      - "bictegravir/emtricitabine/tenofovir alafenamide daily"
+    labs:
+      - "CD4 count 350"
+  negation_phrases:
+    - "no history of HIV"
+  family_history_phrases:
+    - "family history of HIV"
+  distractor_meds:
+  weight: 0.2
+- code: "A04.72"
+  explicit_phrases:
+    - "C. diff"
+    - "Clostridioides difficile infection"
+  implicit_signals:
+    medications:
+      - "oral vancomycin 125 mg QID"
+  negation_phrases:
+    - "no history of C. diff"
+  family_history_phrases:
+    - "family history of C. diff"
+  distractor_meds:
+  weight: 0.1
+- code: "B18.2"
+  explicit_phrases:
+    - "chronic hepatitis C"
+    - "HCV"
+  implicit_signals:
+    medications:
+      - "sofosbuvir/velpatasvir 400/100 mg daily"
+    labs:
+      - "HCV RNA positive"
+  negation_phrases:
+    - "no history of chronic hepatitis C"
+  family_history_phrases:
+    - "family history of chronic hepatitis C"
+  distractor_meds:
+  weight: 0.2
+- code: "D50.9"
+  explicit_phrases:
+    - "iron deficiency anemia"
+  implicit_signals:
+    medications:
+      - "ferrous gluconate 324 mg daily"
+    labs:
+      - "Ferritin 8 ng/mL"
+  negation_phrases:
+    - "no history of iron deficiency anemia"
+  family_history_phrases:
+    - "family history of iron deficiency anemia"
+  distractor_meds:
+  weight: 0.5
+- code: "L20.9"
+  explicit_phrases:
+    - "atopic dermatitis"
+    - "eczema"
+  implicit_signals:
+    medications:
+      - "triamcinolone 0.1% cream BID"
+      - "hydrocortisone 2.5% cream PRN"
+  negation_phrases:
+    - "no history of atopic dermatitis"
+  family_history_phrases:
+    - "family history of atopic dermatitis"
+  distractor_meds:
+  weight: 0.5
+- code: "L40.0"
+  explicit_phrases:
+    - "psoriasis"
+    - "plaque psoriasis"
+  implicit_signals:
+    medications:
+      - "calcipotriene 0.005% ointment BID"
+      - "secukinumab 150 mg Q4W"
+  negation_phrases:
+    - "no history of psoriasis"
+  family_history_phrases:
+    - "family history of psoriasis"
+  distractor_meds:
+  weight: 0.2
+- code: "M79.10"
+  explicit_phrases:
+    - "myalgia"
+    - "muscle pain"
+  implicit_signals:
+    medications:
+      - "methocarbamol 750 mg TID"
+  negation_phrases:
+    - "no history of myalgia"
+  family_history_phrases:
+    - "family history of myalgia"
+  distractor_meds:
+  weight: 0.6
+- code: "M79.7"
+  explicit_phrases:
+    - "fibromyalgia"
+  implicit_signals:
+    medications:
+      - "duloxetine 60 mg daily"
+      - "pregabalin 75 mg BID"
+  negation_phrases:
+    - "no history of fibromyalgia"
+  family_history_phrases:
+    - "family history of fibromyalgia"
+  distractor_meds:
+  weight: 0.4
+- code: "N40.1"
+  explicit_phrases:
+    - "BPH"
+    - "benign prostatic hyperplasia"
+  implicit_signals:
+    medications:
+      - "finasteride 5 mg daily"
+      - "dutasteride 0.5 mg daily"
+  negation_phrases:
+    - "no history of BPH"
+  family_history_phrases:
+    - "family history of BPH"
+  distractor_meds:
+  weight: 0.5
+- code: "Z87.891"
+  explicit_phrases:
+    - "history of tobacco use"
+    - "former smoker"
+  implicit_signals:
+    medications:
+      - "nicotine patch 21 mg daily"
+  negation_phrases:
+    - "no history of history of tobacco use"
+  family_history_phrases:
+    - "family history of history of tobacco use"
+  distractor_meds:
+  weight: 0.6
+- code: "K59.00"
+  explicit_phrases:
+    - "constipation"
+  implicit_signals:
+    medications:
+      - "polyethylene glycol 17g daily"
+      - "docusate sodium 100 mg BID"
+  negation_phrases:
+    - "no history of constipation"
+  family_history_phrases:
+    - "family history of constipation"
+  distractor_meds:
+  weight: 0.7
+- code: "H40.9"
+  explicit_phrases:
+    - "glaucoma"
+  implicit_signals:
+    medications:
+      - "latanoprost 0.005% eye drops at bedtime"
+      - "timolol 0.5% eye drops BID"
+  negation_phrases:
+    - "no history of glaucoma"
+  family_history_phrases:
+    - "family history of glaucoma"
+  distractor_meds:
+  weight: 0.4
+- code: "H25.9"
+  explicit_phrases:
+    - "cataracts"
+  implicit_signals:
+  negation_phrases:
+    - "no history of cataracts"
+  family_history_phrases:
+    - "family history of cataracts"
+  distractor_meds:
+  weight: 0.5
+- code: "F10.20"
+  explicit_phrases:
+    - "alcohol use disorder"
+    - "alcoholism"
+  implicit_signals:
+    medications:
+      - "naltrexone 50 mg daily"
+      - "acamprosate 333 mg TID"
+  negation_phrases:
+    - "no history of alcohol use disorder"
+  family_history_phrases:
+    - "family history of alcohol use disorder"
+  distractor_meds:
+  weight: 0.3
+- code: "F11.20"
+  explicit_phrases:
+    - "opioid use disorder"
+  implicit_signals:
+    medications:
+      - "buprenorphine/naloxone 8/2 mg daily"
+      - "methadone 40 mg daily"
+  negation_phrases:
+    - "no history of opioid use disorder"
+  family_history_phrases:
+    - "family history of opioid use disorder"
+  distractor_meds:
+  weight: 0.2
+- code: "F17.210"
+  explicit_phrases:
+    - "tobacco use disorder"
+    - "smoker"
+  implicit_signals:
+    medications:
+      - "varenicline 1 mg BID"
+  negation_phrases:
+    - "no history of tobacco use disorder"
+  family_history_phrases:
+    - "family history of tobacco use disorder"
+  distractor_meds:
+  weight: 0.6
+- code: "E79.0"
+  explicit_phrases:
+    - "hyperuricemia"
+  implicit_signals:
+    medications:
+      - "febuxostat 40 mg daily"
+    labs:
+      - "Uric acid 9.2 mg/dL"
+  negation_phrases:
+    - "no history of hyperuricemia"
+  family_history_phrases:
+    - "family history of hyperuricemia"
+  distractor_meds:
+  weight: 0.3
+- code: "D51.0"
+  explicit_phrases:
+    - "vitamin B12 deficiency anemia"
+    - "pernicious anemia"
+  implicit_signals:
+    medications:
+      - "cyanocobalamin 1000 mcg IM monthly"
+    labs:
+      - "Vitamin B12 150 pg/mL"
+  negation_phrases:
+    - "no history of vitamin B12 deficiency anemia"
+  family_history_phrases:
+    - "family history of vitamin B12 deficiency anemia"
+  distractor_meds:
+  weight: 0.3
+- code: "G62.9"
+  explicit_phrases:
+    - "polyneuropathy"
+    - "neuropathy"
+  implicit_signals:
+    medications:
+      - "gabapentin 300 mg TID"
+  negation_phrases:
+    - "no history of polyneuropathy"
+  family_history_phrases:
+    - "family history of polyneuropathy"
+  distractor_meds:
+  weight: 0.5
+- code: "I83.90"
+  explicit_phrases:
+    - "varicose veins"
+  implicit_signals:
+    medications:
+      - "compression stockings"
+  negation_phrases:
+    - "no history of varicose veins"
+  family_history_phrases:
+    - "family history of varicose veins"
+  distractor_meds:
+  weight: 0.4
+- code: "R03.0"
+  explicit_phrases:
+    - "elevated blood pressure"
+  implicit_signals:
+    labs:
+      - "BP 135/85"
+  negation_phrases:
+    - "no history of elevated blood pressure"
+  family_history_phrases:
+    - "family history of elevated blood pressure"
+  distractor_meds:
+  weight: 0.4
+- code: "R73.03"
+  explicit_phrases:
+    - "prediabetes"
+  implicit_signals:
+    labs:
+      - "HbA1c 6.0%"
+  negation_phrases:
+    - "no history of prediabetes"
+  family_history_phrases:
+    - "family history of prediabetes"
+  distractor_meds:
+  weight: 0.6
+- code: "I95.9"
+  explicit_phrases:
+    - "hypotension"
+  implicit_signals:
+    medications:
+      - "midodrine 5 mg TID"
+      - "fludrocortisone 0.1 mg daily"
+    labs:
+      - "BP 85/55"
+  negation_phrases:
+    - "no history of hypotension"
+  family_history_phrases:
+    - "family history of hypotension"
+  distractor_meds:
+  weight: 0.1
+- code: "K58.0"
+  explicit_phrases:
+    - "IBS with diarrhea"
+    - "irritable bowel syndrome"
+  implicit_signals:
+    medications:
+      - "loperamide 2 mg PRN"
+      - "dicyclomine 20 mg QID"
+  negation_phrases:
+    - "no history of IBS with diarrhea"
+  family_history_phrases:
+    - "family history of IBS with diarrhea"
+  distractor_meds:
+  weight: 0.3

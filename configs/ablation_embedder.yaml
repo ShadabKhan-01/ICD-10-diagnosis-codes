@@ -1,0 +1,10 @@
+ablation_type: embedder
+base_config: configs/phase1.yaml
+variants:
+  - embedder: sentence-transformers/all-MiniLM-L6-v2
+    label: minilm
+  - embedder: pritamdeka/S-PubMedBert-MS-MARCO
+    label: pubmedbert
+fixed:
+  k: 20
+  strategy: rag

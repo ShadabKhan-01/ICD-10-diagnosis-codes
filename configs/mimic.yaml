@@ -1,0 +1,7 @@
+mimic:
+  discharge_path: ""  # user must fill
+  diagnoses_path: ""  # user must fill
+  n_sample: 200
+  seed: 42
+  output_dir: "data/mimic"
+base_config: configs/phase1.yaml
