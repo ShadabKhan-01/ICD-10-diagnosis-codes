@@ -8,7 +8,7 @@ Test §10.1 checks that removing the evidence block yields byte-identical text.
 import json
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 
 logger = logging.getLogger(__name__)
 
