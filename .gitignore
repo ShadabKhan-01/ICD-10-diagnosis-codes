@@ -36,7 +36,12 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Archives
+*.zip
+*.tar.gz
+
 # Keep small test fixtures
 !data/raw/.gitkeep
 !tests/fixtures/
+
 
