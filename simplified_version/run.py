@@ -123,7 +123,7 @@ def main():
 
     # 5. Save outputs
     out_dir = Path(args.out)
-    save_experiment_outputs(out_dir, summary_rows, raw_results_by_config)
+    save_experiment_outputs(out_dir, summary_rows, raw_results_by_config, valid_codes=valid_codes)
     print("\n[Done] Evaluation completed successfully!")
 
 

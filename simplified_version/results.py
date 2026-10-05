@@ -195,9 +195,13 @@ def save_experiment_outputs(
     output_dir: Path,
     summary_rows: List[Dict[str, Any]],
     raw_results_by_config: Dict[str, List[Dict[str, Any]]],
+    valid_codes: Optional[Set[str]] = None,
 ) -> None:
-    """Save raw JSONL predictions and Table II CSV / Markdown."""
+    """Save raw JSONL predictions and write cumulative Table II CSV / Markdown."""
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    if valid_codes is None:
+        valid_codes = get_valid_code_set()
 
     # 1. Save raw results JSONL per configuration
     for cfg_name, items in raw_results_by_config.items():
@@ -206,7 +210,35 @@ def save_experiment_outputs(
             for item in items:
                 f.write(json.dumps(item) + "\n")
 
-    # 2. Save CSV summary
+    # 2. Collect and aggregate ALL result JSONL files in output_dir
+    all_summary_rows = []
+    jsonl_files = sorted(output_dir.glob("*.jsonl"))
+
+    for jf in jsonl_files:
+        items = []
+        with open(jf, "r", encoding="utf-8") as f:
+            for line in f:
+                if line.strip():
+                    items.append(json.loads(line))
+        if not items:
+            continue
+
+        model_name = items[0].get("model", "unknown")
+        strategy_name = items[0].get("strategy", "unknown")
+        m = compute_metrics(items, valid_codes=valid_codes)
+        m["model"] = model_name
+        m["strategy"] = strategy_name
+        all_summary_rows.append(m)
+
+    # Sort rows cleanly: real models first, Zero-Shot -> Few-Shot -> RAG
+    strat_order = {"Zero-Shot": 0, "Few-Shot (k=5)": 1, "RAG (top-10)": 2}
+    all_summary_rows.sort(key=lambda x: (1 if "mock" in x["model"].lower() else 0, x["model"], strat_order.get(x["strategy"], 99)))
+
+    # Fallback to current run's rows if no jsonl files found
+    if not all_summary_rows:
+        all_summary_rows = summary_rows
+
+    # 3. Save cumulative CSV summary
     csv_path = output_dir / "table2_summary.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
@@ -217,13 +249,13 @@ def save_experiment_outputs(
             ]
         )
         writer.writeheader()
-        for row in summary_rows:
+        for row in all_summary_rows:
             writer.writerow(row)
 
-    # 3. Save Markdown summary
+    # 4. Save cumulative Markdown summary
     md_path = output_dir / "table2_summary.md"
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# ICD-10 LLM Coding Evaluation Summary\n\n")
-        f.write(format_markdown_table(summary_rows) + "\n")
+        f.write(format_markdown_table(all_summary_rows) + "\n")
 
-    print(f"[Results Saved] Check directory: {output_dir}")
+    print(f"[Results Saved] Updated table2_summary.csv and table2_summary.md in: {output_dir}")
