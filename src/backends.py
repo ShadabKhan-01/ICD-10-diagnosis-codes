@@ -334,7 +334,15 @@ class GeminiBackend(LLMBackend):
         max_retries: int = 5,
         timeout: int = 60,
     ):
-        self.model_id = model_id.replace("models/", "")
+        raw_id = model_id.replace("models/", "")
+        # Automatic mapping for models retired by Google API
+        if raw_id in ("gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash"):
+            self.model_id = "gemini-3.8-flash"
+        elif raw_id in ("gemini-1.5-pro", "gemini-2.0-pro", "gemini-2.5-pro", "gemini-pro"):
+            self.model_id = "gemini-pro-latest"
+        else:
+            self.model_id = raw_id
+
         self._context_limit = context_limit_tokens
         self.seed = seed
         self.template_mode = template_mode
@@ -408,12 +416,14 @@ class GeminiBackend(LLMBackend):
     def generate(self, messages: List[Dict[str, str]], max_new_tokens: int) -> GenResult:
         """Call Gemini generateContent with greedy decoding (temperature=0.0)."""
         sys_inst, contents = self._convert_messages(messages)
+        gen_config: Dict[str, Any] = {
+            "temperature": 0.0,
+            "maxOutputTokens": max(max_new_tokens, 2048),
+            "thinkingConfig": {"thinkingBudget": 0},
+        }
         payload: Dict[str, Any] = {
             "contents": contents,
-            "generationConfig": {
-                "temperature": 0.0,
-                "maxOutputTokens": max_new_tokens,
-            },
+            "generationConfig": gen_config,
         }
         if sys_inst:
             payload["systemInstruction"] = {"parts": [{"text": sys_inst}]}
@@ -424,7 +434,22 @@ class GeminiBackend(LLMBackend):
         )
 
         start = time.time()
-        res = _retry_post(url, payload, max_retries=self.max_retries, timeout=self.timeout)
+        try:
+            res = _retry_post(url, payload, max_retries=self.max_retries, timeout=self.timeout)
+        except RuntimeError as e:
+            if "404" in str(e) and self.model_id != "gemini-3.8-flash":
+                logger.warning(
+                    f"Gemini model '{self.model_id}' returned 404. "
+                    "Automatically retrying with active 'gemini-3.8-flash'..."
+                )
+                self.model_id = "gemini-3.8-flash"
+                fallback_url = (
+                    f"https://generativelanguage.googleapis.com/v1beta/models/"
+                    f"{self.model_id}:generateContent?key={self.api_key}"
+                )
+                res = _retry_post(fallback_url, payload, max_retries=self.max_retries, timeout=self.timeout)
+            else:
+                raise
         latency = time.time() - start
 
         # Extract output text

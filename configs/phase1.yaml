@@ -32,18 +32,23 @@ models:
     template_mode: "prepend"  # Mistral rejects system role
   gemini-1.5-flash:
     backend: "gemini"
-    model_id: "gemini-1.5-flash"
+    model_id: "gemini-3.8-flash"
     context_limit: 1048576
     template_mode: "system"
-  gemini-1.5-pro:
+  gemini-3.8-flash:
     backend: "gemini"
-    model_id: "gemini-1.5-pro"
+    model_id: "gemini-3.8-flash"
+    context_limit: 1048576
+    template_mode: "system"
+  gemini-flash:
+    backend: "gemini"
+    model_id: "gemini-flash-latest"
+    context_limit: 1048576
+    template_mode: "system"
+  gemini-pro:
+    backend: "gemini"
+    model_id: "gemini-pro-latest"
     context_limit: 2097152
-    template_mode: "system"
-  gemini-2.0-flash:
-    backend: "gemini"
-    model_id: "gemini-2.0-flash"
-    context_limit: 1048576
     template_mode: "system"
   gpt-4o-mini:
     backend: "openai"
