@@ -20,8 +20,12 @@ from utils import sha256_file, sha256_str
 
 def map_model_name(raw_name: str) -> str:
     lower_name = raw_name.lower()
+    if 'gemini-3.8-flash' in lower_name:
+        return 'Gemini-3.8-Flash'
     if 'gemini-1.5-flash' in lower_name:
         return 'Gemini-1.5-Flash'
+    if 'gemini-flash' in lower_name:
+        return 'Gemini-Flash'
     if 'gemini-1.5-pro' in lower_name:
         return 'Gemini-1.5-Pro'
     if 'gemini-2.0-flash' in lower_name:
@@ -55,7 +59,9 @@ def sort_key(row):
     model_order = [
         'LLaMA-3-8B-Instruct',
         'BioMistral-7B',
+        'Gemini-3.8-Flash',
         'Gemini-1.5-Flash',
+        'Gemini-Flash',
         'Gemini-1.5-Pro',
         'Gemini-2.0-Flash',
         'GPT-4o-Mini',
