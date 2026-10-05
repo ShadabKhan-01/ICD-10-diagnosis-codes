@@ -30,6 +30,46 @@ models:
     bnb_4bit_quant_type: "nf4"
     stop_tokens: []
     template_mode: "prepend"  # Mistral rejects system role
+  gemini-1.5-flash:
+    backend: "gemini"
+    model_id: "gemini-1.5-flash"
+    context_limit: 1048576
+    template_mode: "system"
+  gemini-1.5-pro:
+    backend: "gemini"
+    model_id: "gemini-1.5-pro"
+    context_limit: 2097152
+    template_mode: "system"
+  gemini-2.0-flash:
+    backend: "gemini"
+    model_id: "gemini-2.0-flash"
+    context_limit: 1048576
+    template_mode: "system"
+  gpt-4o-mini:
+    backend: "openai"
+    model_id: "gpt-4o-mini"
+    context_limit: 128000
+    template_mode: "system"
+  gpt-4o:
+    backend: "openai"
+    model_id: "gpt-4o"
+    context_limit: 128000
+    template_mode: "system"
+  claude-3-5-sonnet:
+    backend: "anthropic"
+    model_id: "claude-3-5-sonnet-20241022"
+    context_limit: 200000
+    template_mode: "system"
+  qwen2.5-7b:
+    backend: "hf"
+    model_id: "Qwen/Qwen2.5-7B-Instruct"
+    context_limit: 32768
+    quantisation: "nf4"
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_use_double_quant: true
+    bnb_4bit_quant_type: "nf4"
+    stop_tokens: ["<|im_end|>"]
+    template_mode: "system"
 
 # --- Strategies ---
 strategies:

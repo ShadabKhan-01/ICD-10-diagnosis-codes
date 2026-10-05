@@ -20,22 +20,57 @@ from utils import sha256_file, sha256_str
 
 def map_model_name(raw_name: str) -> str:
     lower_name = raw_name.lower()
+    if 'gemini-1.5-flash' in lower_name:
+        return 'Gemini-1.5-Flash'
+    if 'gemini-1.5-pro' in lower_name:
+        return 'Gemini-1.5-Pro'
+    if 'gemini-2.0-flash' in lower_name:
+        return 'Gemini-2.0-Flash'
+    if 'gpt-4o-mini' in lower_name:
+        return 'GPT-4o-Mini'
+    if 'gpt-4o' in lower_name:
+        return 'GPT-4o'
+    if 'claude-3-5-sonnet' in lower_name:
+        return 'Claude-3.5-Sonnet'
+    if 'claude' in lower_name:
+        return 'Claude-3-Haiku'
     if 'llama' in lower_name:
         return 'LLaMA-3-8B-Instruct'
-    if 'mistral' in lower_name or 'biomistral' in lower_name:
+    if 'biomistral' in lower_name:
         return 'BioMistral-7B'
+    if 'mistral' in lower_name:
+        return 'Mistral-7B'
+    if 'qwen' in lower_name:
+        return 'Qwen-2.5-7B'
     return raw_name
 
 def sort_key(row):
-    order = {
-        ('LLaMA-3-8B-Instruct', 'Zero-Shot'): 1,
-        ('LLaMA-3-8B-Instruct', 'Few-Shot (k=5)'): 2,
-        ('LLaMA-3-8B-Instruct', 'RAG'): 3,
-        ('BioMistral-7B', 'Zero-Shot'): 4,
-        ('BioMistral-7B', 'Few-Shot (k=5)'): 5,
-        ('BioMistral-7B', 'RAG'): 6,
-    }
-    return order.get((row['Model'], row['Strategy']), 999)
+    strategy_rank = {
+        'Zero-Shot': 1,
+        'Few-Shot (k=5)': 2,
+        'Few-Shot': 2,
+        'RAG': 3,
+    }.get(row.get('Strategy', ''), 99)
+
+    model_order = [
+        'LLaMA-3-8B-Instruct',
+        'BioMistral-7B',
+        'Gemini-1.5-Flash',
+        'Gemini-1.5-Pro',
+        'Gemini-2.0-Flash',
+        'GPT-4o-Mini',
+        'GPT-4o',
+        'Claude-3.5-Sonnet',
+        'Qwen-2.5-7B',
+        'Mistral-7B',
+    ]
+    model_name = row.get('Model', '')
+    if model_name in model_order:
+        model_rank = model_order.index(model_name)
+    else:
+        model_rank = 100
+
+    return (model_rank, model_name, strategy_rank)
 
 
 def validate_directory(results_dir: str) -> None:
@@ -59,7 +94,8 @@ def validate_directory(results_dir: str) -> None:
                         backend = "unknown"
                 backends.add(backend)
 
-    if "mock" in backends and ("hf" in backends or "real" in backends):
+    real_backends = {"hf", "gemini", "openai", "anthropic", "real"}
+    if "mock" in backends and any(b in real_backends for b in backends):
         raise ValueError("Cannot evaluate mixed mock and real results directory!")
 
 
@@ -158,8 +194,9 @@ def main():
                             })
 
     # Mixing guard
-    if 'mock' in all_backends and 'hf' in all_backends:
-        logger.error("Mixing Guard: BOTH 'mock' and 'hf' backends found in results. Refusing to evaluate.")
+    real_backends = {"hf", "gemini", "openai", "anthropic", "real"}
+    if 'mock' in all_backends and any(b in real_backends for b in all_backends):
+        logger.error("Mixing Guard: BOTH 'mock' and real backends found in results. Refusing to evaluate.")
         sys.exit(1)
     if all_backends == {'mock'}:
         print("*" * 60)

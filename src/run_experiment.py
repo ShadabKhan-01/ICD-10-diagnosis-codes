@@ -32,7 +32,7 @@ from prompts import (
     ZeroShotEvidence, FewShotEvidence, RAGEvidence,
     build_messages,
 )
-from backends import HFBackend, MockBackend
+from backends import HFBackend, MockBackend, create_backend
 from utils import (
     seed_everything, sha256_file, sha256_str, atomic_write,
     atomic_jsonl_append, gpu_info, library_versions, git_commit,
@@ -178,8 +178,11 @@ def parse_args():
                     choices=["zero_shot", "few_shot", "rag"],
                     help="Strategies to run")
     p.add_argument("--split", default="eval", help="Dataset split")
+    p.add_argument("--data", help="Direct path to dataset JSONL (e.g. data/synthetic/run01/eval.jsonl)")
     p.add_argument("--out", required=True, help="Output directory")
-    p.add_argument("--backend", default="hf", choices=["hf", "mock"])
+    p.add_argument("--backend", default="auto",
+                   choices=["auto", "hf", "mock", "gemini", "openai", "anthropic"],
+                   help="LLM backend: auto (inferred from model name), hf, mock, gemini, openai, anthropic")
     p.add_argument("--limit", type=int, help="Limit instances (smoke test)")
     return p.parse_args()
 
@@ -208,7 +211,13 @@ def main():
     synth_path = Path(synth_dir)
 
     data_file = None
-    if (synth_path / f"{args.split}.jsonl").exists():
+    if getattr(args, "data", None) and Path(args.data).exists():
+        data_file = Path(args.data)
+        run_dir = data_file.parent
+    elif (synth_path / "run01" / f"{args.split}.jsonl").exists():
+        run_dir = synth_path / "run01"
+        data_file = run_dir / f"{args.split}.jsonl"
+    elif (synth_path / f"{args.split}.jsonl").exists():
         run_dir = synth_path
         data_file = synth_path / f"{args.split}.jsonl"
     elif synth_path.exists():
@@ -287,30 +296,36 @@ def main():
     for model_key in models_to_run:
         model_cfg = config.get("models", {}).get(model_key)
         if not model_cfg:
-            logger.warning(f"Model '{model_key}' not in config, skipping")
-            continue
+            logger.info(f"Model '{model_key}' not in config; dynamically creating default settings.")
+            model_lower = model_key.lower()
+            context_lim = (
+                1048576 if "gemini" in model_lower
+                else (128000 if ("gpt" in model_lower or "claude" in model_lower) else 8192)
+            )
+            model_cfg = {
+                "model_id": model_key,
+                "context_limit": context_lim,
+                "template_mode": "prepend" if "biomistral" in model_lower else "system",
+            }
 
         model_id = model_cfg.get("model_id", model_key)
         context_limit = model_cfg.get("context_limit", 8192)
         template_mode = model_cfg.get("template_mode", "system")
         stop_tokens = model_cfg.get("stop_tokens", [])
 
-        # Create backend
-        if args.backend == "mock":
-            backend = MockBackend(
-                model_id=model_id,
-                context_limit_tokens=context_limit,
-                seed=seed,
-                template_mode=template_mode,
-            )
-        else:
-            backend = HFBackend(
-                model_id=model_id,
-                context_limit_tokens=context_limit,
-                seed=seed,
-                stop_tokens=stop_tokens,
-                template_mode=template_mode,
-            )
+        # Determine backend
+        backend_type = args.backend
+        if backend_type == "auto":
+            backend_type = model_cfg.get("backend", "auto")
+
+        backend = create_backend(
+            model_id=model_id,
+            backend_type=backend_type,
+            context_limit=context_limit,
+            template_mode=template_mode,
+            seed=seed,
+            stop_tokens=stop_tokens,
+        )
 
         backend.load()
         backend_info = backend.info
@@ -342,7 +357,7 @@ def main():
 
                 rag_k = config.get("strategies", {}).get("rag", {}).get("k", 20)
 
-                if args.backend == "mock":
+                if backend_info.get("backend") == "mock":
                     from retrieval import MockRetriever
                     retriever = MockRetriever(vocab=vocab, k=rag_k)
                 else:
@@ -372,8 +387,9 @@ def main():
                 logger.warning(f"Unknown strategy '{strategy}', skipping")
                 continue
 
-            # Output file: <model_key>__<strategy>.jsonl
-            out_file = str(out_dir / f"{model_key}__{strategy}.jsonl")
+            # Output file: <model_slug>__<strategy>.jsonl
+            model_slug = model_key.replace("/", "_").replace(":", "_").replace(" ", "_")
+            out_file = str(out_dir / f"{model_slug}__{strategy}.jsonl")
 
             # Resume: load completed IDs
             completed_ids: Set[str] = set()
@@ -439,7 +455,7 @@ def main():
                     "model_id": backend_info.get("model_id", ""),
                     "model_revision": backend_info.get("model_revision", ""),
                     "strategy": strategy,
-                    "backend": args.backend,
+                    "backend": backend_info.get("backend", args.backend),
                     "template_mode": template_mode,
                     "seed": seed,
                     "config_hash": config_hash,

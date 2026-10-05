@@ -66,14 +66,38 @@ python src/ablations.py --config configs/ablation_k.yaml --type k
 | §4.6 (ablation tables) | `ablations.py` | `python src/ablations.py ...` |
 | §4.7 (significance) | `significance.py` | `python src/significance.py ...` |
 
-## Models
+## Models & Supported Backends
 
-| Model | Context | Config Key | HuggingFace ID |
+The research pipeline supports evaluating **any open-source** or **commercial API** model:
+
+| Model Category | Examples | Backend | Requirements / Notes |
 |---|---|---|---|
-| LLaMA-3-8B-Instruct | 8192 | `llama3` | `meta-llama/Meta-Llama-3-8B-Instruct` (gated) |
-| BioMistral-7B | 2048 | `biomistral` | `BioMistral/BioMistral-7B` |
+| **Open-Source (HuggingFace)** | LLaMA-3-8B-Instruct (`llama3`), BioMistral-7B (`biomistral`), Qwen-2.5-7B (`qwen2.5-7b`) | `hf` | CUDA GPU (4-bit NF4 quantisation, ~5–6 GB VRAM) |
+| **Google Gemini API** | `gemini-1.5-flash`, `gemini-1.5-pro`, `gemini-2.0-flash` | `gemini` | `export GEMINI_API_KEY="..."` (Runs on CPU/GPU, fast) |
+| **OpenAI API** | `gpt-4o-mini`, `gpt-4o` | `openai` | `export OPENAI_API_KEY="..."` (Runs on CPU/GPU) |
+| **Anthropic Claude** | `claude-3-5-sonnet`, `claude-3-haiku` | `anthropic` | `export ANTHROPIC_API_KEY="..."` |
+| **Local OpenAI-Compatible** | Ollama / vLLM local endpoints | `openai` | Set `OPENAI_BASE_URL="http://localhost:11434/v1"` |
+| **Mock (Testing)** | Deterministic CPU mock | `mock` | CPU-only, no downloads or keys required |
 
-Both loaded in 4-bit NF4 quantisation (~5–6 GB VRAM each).
+### Running Custom Models
+
+You can run any model by passing its key or model ID directly to `--models`:
+
+```bash
+# 1. Test Google Gemini (runs directly on CPU or GPU without heavy downloads)
+export GEMINI_API_KEY="your-api-key"
+python src/run_experiment.py --config configs/phase1.yaml \
+    --models gemini-1.5-flash --strategies zero_shot few_shot rag --out results/gemini_exp
+
+# 2. Test OpenAI GPT-4o-mini
+export OPENAI_API_KEY="your-api-key"
+python src/run_experiment.py --config configs/phase1.yaml \
+    --models gpt-4o-mini --strategies zero_shot few_shot rag --out results/openai_exp
+
+# 3. Test any Hugging Face model
+python src/run_experiment.py --config configs/phase1.yaml \
+    --models Qwen/Qwen2.5-7B-Instruct --strategies zero_shot few_shot rag --out results/qwen_exp
+```
 
 ## Project Structure
 

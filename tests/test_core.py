@@ -307,3 +307,56 @@ def test_synth_data_module_importable():
     """Verify synth_data module can be imported."""
     import synth_data
     assert hasattr(synth_data, 'generate_records') or hasattr(synth_data, 'main')
+
+
+# Multi-model backend tests
+def test_create_backend_factory():
+    """Verify backend factory correctly instantiates different backends."""
+    from backends import create_backend, MockBackend, GeminiBackend, OpenAIBackend, AnthropicBackend, HFBackend
+
+    mock_b = create_backend("mock_model", backend_type="mock")
+    assert isinstance(mock_b, MockBackend)
+
+    # Auto-detection
+    gemini_b = create_backend("gemini-1.5-flash", api_key="fake_key")
+    assert isinstance(gemini_b, GeminiBackend)
+    assert gemini_b.model_id == "gemini-1.5-flash"
+
+    gpt_b = create_backend("gpt-4o-mini", api_key="fake_key")
+    assert isinstance(gpt_b, OpenAIBackend)
+
+    claude_b = create_backend("claude-3-5-sonnet", api_key="fake_key")
+    assert isinstance(claude_b, AnthropicBackend)
+
+    hf_b = create_backend("meta-llama/Meta-Llama-3-8B-Instruct")
+    assert isinstance(hf_b, HFBackend)
+
+
+def test_gemini_message_conversion():
+    """Verify GeminiBackend converts system and user messages properly."""
+    from backends import GeminiBackend
+    b = GeminiBackend("gemini-1.5-flash", api_key="test_key")
+    msgs = [
+        {"role": "system", "content": "You are a medical coder."},
+        {"role": "user", "content": "Patient has hypertension."},
+    ]
+    sys_inst, contents = b._convert_messages(msgs)
+    assert sys_inst == "You are a medical coder."
+    assert len(contents) == 1
+    assert contents[0]["role"] == "user"
+    assert contents[0]["parts"][0]["text"] == "Patient has hypertension."
+
+
+def test_missing_api_key_raises_runtime_error():
+    """Verify API backends raise clear RuntimeError if key is missing."""
+    import os
+    from backends import GeminiBackend
+    old_gemini = os.environ.pop("GEMINI_API_KEY", None)
+    old_google = os.environ.pop("GOOGLE_API_KEY", None)
+    try:
+        gb = GeminiBackend("gemini-1.5-flash", api_key=None)
+        with pytest.raises(RuntimeError, match="Gemini API key not found"):
+            gb.load()
+    finally:
+        if old_gemini: os.environ["GEMINI_API_KEY"] = old_gemini
+        if old_google: os.environ["GOOGLE_API_KEY"] = old_google
