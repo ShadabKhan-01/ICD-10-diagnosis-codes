@@ -8,6 +8,7 @@ data/mimic/
 # Results
 results/
 results_mock/
+simplified_version/results/
 
 # Reports (auto-generated, can be regenerated)
 reports/
