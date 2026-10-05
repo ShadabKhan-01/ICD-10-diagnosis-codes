@@ -361,12 +361,27 @@ def main():
                     from retrieval import MockRetriever
                     retriever = MockRetriever(vocab=vocab, k=rag_k)
                 else:
+                    try:
+                        import sentence_transformers
+                    except ImportError:
+                        logger.error(
+                            "\n" + "=" * 60 + "\n"
+                            "RAG strategy requires 'sentence-transformers', which is not installed.\n"
+                            "To enable RAG:\n"
+                            "  1. Run: pip install sentence-transformers\n"
+                            "  2. Or run on Google Colab GPU: !pip install sentence-transformers\n"
+                            "Skipping RAG strategy for now (zero_shot and few_shot results are preserved).\n"
+                            + "=" * 60
+                        )
+                        continue
+
                     embedder = retrieval_cfg.get("embedder", "sentence-transformers/all-MiniLM-L6-v2")
                     index_dir = retrieval_cfg.get("index_dir", "data/index")
                     embedder_slug = embedder.replace("/", "_")
                     index_path = os.path.join(index_dir, embedder_slug)
 
-                    if vocab and not Path(index_path).exists():
+                    meta_file = Path(index_path) / "meta.json"
+                    if vocab and not meta_file.exists():
                         from retrieval import build_index
                         build_index(embedder, vocab, index_path)
 
