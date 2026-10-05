@@ -66,8 +66,22 @@ def _post_with_retry(url: str, payload: Dict[str, Any], headers: Optional[Dict[s
             raise RuntimeError(f"Network error: {e.reason}") from e
 
 
+_LAST_GEMINI_CALL_TIME = 0.0
+
+
+def _pace_gemini_calls(min_interval: float = 3.5):
+    """Pace calls to ensure we stay safely under Gemini free tier 15 RPM quota."""
+    global _LAST_GEMINI_CALL_TIME
+    now = time.time()
+    elapsed = now - _LAST_GEMINI_CALL_TIME
+    if elapsed < min_interval:
+        time.sleep(min_interval - elapsed)
+    _LAST_GEMINI_CALL_TIME = time.time()
+
+
 def call_gemini(model_id: str, system_prompt: str, user_prompt: str, api_key: Optional[str] = None) -> str:
     """Call Google Gemini API."""
+    _pace_gemini_calls(3.5)
     key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not key:
         raise ValueError(

@@ -78,9 +78,15 @@ def compute_metrics(
             hits8 = sum(1 for c in top8 if c in gold)
             p8_scores.append(hits8 / 8.0)
 
-    # Micro-F1
+    # Micro-F1, Precision, and Recall
     denom = 2 * total_tp + total_fp + total_fn
     micro_f1 = (2 * total_tp / denom) if denom > 0 else 0.0
+
+    prec_denom = total_tp + total_fp
+    micro_prec = (total_tp / prec_denom) if prec_denom > 0 else 0.0
+
+    rec_denom = total_tp + total_fn
+    micro_rec = (total_tp / rec_denom) if rec_denom > 0 else 0.0
 
     # Macro-F1 over gold code universe
     for c in gold_universe:
@@ -107,9 +113,28 @@ def compute_metrics(
 
     macro_f1 = (sum(code_f1s) / len(code_f1s)) if code_f1s else 0.0
 
-    # P@k means
+    # P@k means (instances with >= k emitted codes)
     p_at_5 = (sum(p5_scores) / len(p5_scores)) if p5_scores else None
     p_at_8 = (sum(p8_scores) / len(p8_scores)) if p8_scores else None
+
+    # Ragas Context Precision (specifically evaluates retrieved candidate ranking for RAG)
+    ragas_ctx_prec_list = []
+    for r in results:
+        cands = r.get("retrieved_candidates", [])
+        if cands:
+            gold = set(r.get("gold_codes", []))
+            hits = 0
+            prec_sum = 0.0
+            for k, c in enumerate(cands, 1):
+                if c in gold:
+                    hits += 1
+                    prec_sum += (hits / k)
+            if hits > 0:
+                ragas_ctx_prec_list.append(prec_sum / hits)
+            else:
+                ragas_ctx_prec_list.append(0.0)
+
+    ragas_ctx_prec = (sum(ragas_ctx_prec_list) / len(ragas_ctx_prec_list)) if ragas_ctx_prec_list else None
 
     # Error rates
     inv_rate = (total_invalid / total_emitted * 100.0) if total_emitted > 0 else 0.0
@@ -120,8 +145,11 @@ def compute_metrics(
         "n": n,
         "micro_f1": round(micro_f1, 3),
         "macro_f1": round(macro_f1, 3),
+        "precision": round(micro_prec, 3),
+        "recall": round(micro_rec, 3),
         "p_at_5": f"{p_at_5:.3f}" if p_at_5 is not None else "n/a",
         "p_at_8": f"{p_at_8:.3f}" if p_at_8 is not None else "n/a",
+        "ragas_context_precision": f"{ragas_ctx_prec:.3f}" if ragas_ctx_prec is not None else "n/a",
         "invalid_code_rate": f"{inv_rate:.1f}%",
         "unsupported_code_rate": f"{unsup_rate:.1f}%",
         "mean_emitted": round(mean_emitted, 2),
@@ -131,36 +159,36 @@ def compute_metrics(
 def format_markdown_table(rows: List[Dict[str, Any]]) -> str:
     """Format benchmark comparison Table II in GitHub markdown."""
     header = (
-        "| Model | Strategy | n | Micro-F1 | Macro-F1 | P@5 | P@8 | Invalid Rate |\n"
-        "|---|---|---:|---:|---:|---:|---:|---:|"
+        "| Model | Strategy | n | Micro-F1 | Macro-F1 | Precision | P@5 | P@8 | Ragas Ctx Prec | Invalid Rate |\n"
+        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|"
     )
     lines = [header]
     for r in rows:
         lines.append(
             f"| {r['model']} | {r['strategy']} | {r['n']} | "
-            f"{r['micro_f1']:.3f} | {r['macro_f1']:.3f} | "
-            f"{r['p_at_5']} | {r['p_at_8']} | {r['invalid_code_rate']} |"
+            f"{r['micro_f1']:.3f} | {r['macro_f1']:.3f} | {r['precision']:.3f} | "
+            f"{r['p_at_5']} | {r['p_at_8']} | {r['ragas_context_precision']} | {r['invalid_code_rate']} |"
         )
     return "\n".join(lines)
 
 
 def print_results_table(rows: List[Dict[str, Any]]) -> None:
     """Print ASCII Table II to console."""
-    print("\n" + "=" * 90)
-    print("                      EVALUATION RESULTS (TABLE II)")
-    print("=" * 90)
+    print("\n" + "=" * 105)
+    print("                               EVALUATION RESULTS (TABLE II)")
+    print("=" * 105)
     print(
-        f"{'Model':<24} | {'Strategy':<18} | {'n':<4} | "
-        f"{'Micro-F1':<8} | {'Macro-F1':<8} | {'P@5':<6} | {'P@8':<6} | {'Invalid Rate':<12}"
+        f"{'Model':<20} | {'Strategy':<16} | {'n':<4} | "
+        f"{'Micro-F1':<8} | {'Macro-F1':<8} | {'Precision':<9} | {'P@5':<6} | {'P@8':<6} | {'Ragas Prec':<10} | {'Invalid':<8}"
     )
-    print("-" * 90)
+    print("-" * 105)
     for r in rows:
         print(
-            f"{r['model']:<24} | {r['strategy']:<18} | {r['n']:<4} | "
-            f"{r['micro_f1']:<8.3f} | {r['macro_f1']:<8.3f} | "
-            f"{r['p_at_5']:<6} | {r['p_at_8']:<6} | {r['invalid_code_rate']:<12}"
+            f"{r['model']:<20} | {r['strategy']:<16} | {r['n']:<4} | "
+            f"{r['micro_f1']:<8.3f} | {r['macro_f1']:<8.3f} | {r['precision']:<9.3f} | "
+            f"{r['p_at_5']:<6} | {r['p_at_8']:<6} | {r['ragas_context_precision']:<10} | {r['invalid_code_rate']:<8}"
         )
-    print("=" * 90 + "\n")
+    print("=" * 105 + "\n")
 
 
 def save_experiment_outputs(
@@ -184,8 +212,8 @@ def save_experiment_outputs(
         writer = csv.DictWriter(
             f,
             fieldnames=[
-                "model", "strategy", "n", "micro_f1", "macro_f1",
-                "p_at_5", "p_at_8", "invalid_code_rate", "unsupported_code_rate", "mean_emitted"
+                "model", "strategy", "n", "micro_f1", "macro_f1", "precision", "recall",
+                "p_at_5", "p_at_8", "ragas_context_precision", "invalid_code_rate", "unsupported_code_rate", "mean_emitted"
             ]
         )
         writer.writeheader()
