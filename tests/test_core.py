@@ -320,7 +320,7 @@ def test_create_backend_factory():
     # Auto-detection
     gemini_b = create_backend("gemini-1.5-flash", api_key="fake_key")
     assert isinstance(gemini_b, GeminiBackend)
-    assert gemini_b.model_id in ("gemini-1.5-flash", "gemini-3.8-flash")
+    assert gemini_b.model_id in ("gemini-1.5-flash", "gemini-3.8-flash", "gemini-flash-latest")
 
     gpt_b = create_backend("gpt-4o-mini", api_key="fake_key")
     assert isinstance(gpt_b, OpenAIBackend)

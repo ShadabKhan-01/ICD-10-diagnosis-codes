@@ -45,6 +45,11 @@ models:
     model_id: "gemini-flash-latest"
     context_limit: 1048576
     template_mode: "system"
+  gemini-flash-lite:
+    backend: "gemini"
+    model_id: "gemini-flash-lite-latest"
+    context_limit: 1048576
+    template_mode: "system"
   gemini-pro:
     backend: "gemini"
     model_id: "gemini-pro-latest"

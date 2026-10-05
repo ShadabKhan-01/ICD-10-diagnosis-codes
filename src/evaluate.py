@@ -24,6 +24,8 @@ def map_model_name(raw_name: str) -> str:
         return 'Gemini-3.8-Flash'
     if 'gemini-1.5-flash' in lower_name:
         return 'Gemini-1.5-Flash'
+    if 'flash-lite' in lower_name:
+        return 'Gemini-Flash-Lite'
     if 'gemini-flash' in lower_name:
         return 'Gemini-Flash'
     if 'gemini-1.5-pro' in lower_name:

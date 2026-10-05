@@ -335,9 +335,9 @@ class GeminiBackend(LLMBackend):
         timeout: int = 60,
     ):
         raw_id = model_id.replace("models/", "")
-        # Automatic mapping for models retired by Google API
-        if raw_id in ("gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash"):
-            self.model_id = "gemini-3.8-flash"
+        # Automatic mapping for models retired by Google API or preview limited
+        if raw_id in ("gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash", "gemini"):
+            self.model_id = "gemini-flash-latest"
         elif raw_id in ("gemini-1.5-pro", "gemini-2.0-pro", "gemini-2.5-pro", "gemini-pro"):
             self.model_id = "gemini-pro-latest"
         else:
@@ -419,8 +419,10 @@ class GeminiBackend(LLMBackend):
         gen_config: Dict[str, Any] = {
             "temperature": 0.0,
             "maxOutputTokens": max(max_new_tokens, 2048),
-            "thinkingConfig": {"thinkingBudget": 0},
         }
+        if "3.8" in self.model_id or "thinking" in self.model_id:
+            gen_config["thinkingConfig"] = {"thinkingBudget": 0}
+
         payload: Dict[str, Any] = {
             "contents": contents,
             "generationConfig": gen_config,
@@ -437,12 +439,12 @@ class GeminiBackend(LLMBackend):
         try:
             res = _retry_post(url, payload, max_retries=self.max_retries, timeout=self.timeout)
         except RuntimeError as e:
-            if "404" in str(e) and self.model_id != "gemini-3.8-flash":
-                logger.warning(
-                    f"Gemini model '{self.model_id}' returned 404. "
-                    "Automatically retrying with active 'gemini-3.8-flash'..."
-                )
-                self.model_id = "gemini-3.8-flash"
+            err_str = str(e)
+            if "INVALID_ARGUMENT" in err_str and "thinkingConfig" in gen_config:
+                gen_config.pop("thinkingConfig", None)
+                res = _retry_post(url, payload, max_retries=self.max_retries, timeout=self.timeout)
+            elif "404" in err_str and self.model_id != "gemini-flash-latest":
+                self.model_id = "gemini-flash-latest"
                 fallback_url = (
                     f"https://generativelanguage.googleapis.com/v1beta/models/"
                     f"{self.model_id}:generateContent?key={self.api_key}"
