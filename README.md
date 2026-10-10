@@ -227,3 +227,25 @@ All HF models: 4-bit NF4, float16 compute on CUDA (checked and written to every 
 - The duplicate-BOS fix is applied to the LLaMA-3 models (see `CHANGELOG.md`). BioMistral's
   chat template was not available to check, so it keeps the default setting.
 - The model runs have not been executed in this environment. Results come from the Colab runs.
+
+## RAGAS ID-Based Retrieval Evaluation
+
+Install the optional evaluation dependencies:
+
+```bash
+pip install -r requirements-ragas.txt
+```
+
+Evaluate saved RAG outputs without rerunning model inference:
+
+```bash
+python src/evaluate_ragas.py \
+  --results-dir results/pilot_llama3_smoke \
+  --data data/synthetic/run01/eval.jsonl \
+  --out-dir results/pilot_llama3_ragas
+```
+
+This evaluation uses RAGAS ID-based Context Precision and Context
+Recall to compare retrieved ICD-10-CM code IDs against gold codes.
+These metrics measure exact code overlap, not semantic relevance
+or LLM-judged faithfulness.
