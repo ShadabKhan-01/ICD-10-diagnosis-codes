@@ -12,47 +12,47 @@ def test_prompt_invariance():
     from prompts import (ZeroShotEvidence, FewShotEvidence, RAGEvidence,
                          render_prompt, build_messages, SYSTEM_TEXT, INSTRUCTION_TEXT,
                          strip_evidence_block)
-    
+
     record = {
         'id': 'test_001',
         'text': 'Patient presents with chest pain and shortness of breath.',
         'medications': ['aspirin 81 mg daily', 'metoprolol 25 mg BID'],
         'gold_codes': ['I25.10', 'I10']
     }
-    
+
     # Create a simple mock retriever
     class MockRetriever:
         def retrieve(self, record):
             from retrieval import Candidate
             return [Candidate('I25.10', 'Coronary artery disease', 0.9, 'note_window_0')]
-    
+
     shots = [{
         'id': 'shot_001',
         'text': 'Example patient with diabetes.',
         'medications': ['metformin 500 mg BID'],
         'gold_codes': ['E11.9']
     }]
-    
+
     zs = ZeroShotEvidence()
     fs = FewShotEvidence(shots)
     rag = RAGEvidence(MockRetriever())
-    
+
     zs_evidence = zs.build_evidence(record)
     fs_evidence = fs.build_evidence(record)
     rag_evidence = rag.build_evidence(record)
-    
+
     zs_prompt = render_prompt(record, zs_evidence)
     fs_prompt = render_prompt(record, fs_evidence)
     rag_prompt = render_prompt(record, rag_evidence)
-    
+
     # Strip evidence blocks and compare
     zs_stripped = strip_evidence_block(zs_prompt, zs_evidence)
     fs_stripped = strip_evidence_block(fs_prompt, fs_evidence)
     rag_stripped = strip_evidence_block(rag_prompt, rag_evidence)
-    
+
     assert zs_stripped == fs_stripped, f"ZS vs FS stripped prompts differ"
     assert zs_stripped == rag_stripped, f"ZS vs RAG stripped prompts differ"
-    
+
     # Also check that SYSTEM_TEXT and INSTRUCTION_TEXT are identical objects/values
     msgs_system = build_messages(record, zs, 'system')
     msgs_prepend = build_messages(record, zs, 'prepend')
@@ -66,7 +66,7 @@ def test_fewshot_disjointness_by_id():
     import tempfile
     import json
     import os
-    
+
     # Create temp pool file with overlapping id
     pool_records = [
         {'id': 'eval_1', 'text': 'pool text 1', 'medications': [], 'gold_codes': ['E11.9'], 'implicit_codes': []},
@@ -77,7 +77,7 @@ def test_fewshot_disjointness_by_id():
         {'id': 'pool_6', 'text': 'pool text 6', 'medications': [], 'gold_codes': ['E78.5'], 'implicit_codes': []},
     ]
     eval_records = [{'id': 'eval_1', 'text': 'eval text 1'}]  # overlaps by id
-    
+
     fd, pool_path = tempfile.mkstemp(suffix='.jsonl')
     try:
         with os.fdopen(fd, 'w') as f:
@@ -94,7 +94,7 @@ def test_fewshot_disjointness_by_hash():
     import tempfile
     import json
     import os
-    
+
     identical_text = 'This exact text appears in both pool and eval'
     pool_records = [
         {'id': 'pool_1', 'text': identical_text, 'medications': [], 'gold_codes': ['E11.9'], 'implicit_codes': []},
@@ -105,7 +105,7 @@ def test_fewshot_disjointness_by_hash():
         {'id': 'pool_6', 'text': 'final', 'medications': [], 'gold_codes': ['E78.5'], 'implicit_codes': []},
     ]
     eval_records = [{'id': 'eval_1', 'text': identical_text}]  # overlaps by text hash
-    
+
     fd, pool_path = tempfile.mkstemp(suffix='.jsonl')
     try:
         with os.fdopen(fd, 'w') as f:
@@ -167,7 +167,7 @@ def test_identity_tp_invalid_unsupported():
     vocab = {'A', 'B', 'C', 'D'}
     pred = [['A', 'B', 'X'], ['C', 'Y', 'A']]
     gold = [{'A', 'C'}, {'A', 'B'}]
-    
+
     t = tp_share(pred, gold, vocab)
     i = invalid_code_rate(pred, vocab)
     u = unsupported_code_rate(pred, gold, vocab)
@@ -195,15 +195,15 @@ def test_cross_check_with_sklearn():
         from sklearn.metrics import f1_score
     except ImportError:
         pytest.skip("scikit-learn not installed")
-        
+
     pred_sets = [{'A', 'B'}, {'A', 'C'}, {'B', 'D'}]
     gold_sets = [{'A', 'C'}, {'A', 'B'}, {'B', 'C'}]
-    
+
     all_codes = sorted(set().union(*pred_sets, *gold_sets))
     mlb = MultiLabelBinarizer(classes=all_codes)
     y_true = mlb.fit_transform([sorted(g) for g in gold_sets])
     y_pred = mlb.transform([sorted(p) for p in pred_sets])
-    
+
     sklearn_f1 = f1_score(y_true, y_pred, average='micro')
     our_f1 = micro_f1(pred_sets, gold_sets)
     assert abs(our_f1 - sklearn_f1) < 1e-10, f"Our: {our_f1}, sklearn: {sklearn_f1}"

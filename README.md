@@ -1,172 +1,251 @@
-# Zero-Shot, Few-Shot, or Retrieval-Augmented? Prompting Strategies for ICD-10 Coding with Open-Weight LLMs
+# ICD-10-CM coding with open-weight LLMs: four prompting strategies
 
-A complete, reproducible research pipeline for evaluating prompting strategies for automated ICD-10-CM coding using open-weight LLMs.
+This project compares four ways of giving an LLM evidence for ICD-10-CM coding, under the
+same prompt, parser, data and evaluation:
 
-## Hardware Requirements
+| Strategy | Evidence the model sees | Where it comes from |
+|---|---|---|
+| `zero_shot` | nothing extra | prompt only |
+| `few_shot` | 5 worked examples | fixed, seeded pool, disjoint from the evaluation records |
+| `rag` | top-20 candidate codes | MiniLM search over official code descriptions |
+| `kg` | top-20 candidate codes | **hybrid**: the same MiniLM seeds, expanded with the official parent and child codes |
 
-- **GPU**: One NVIDIA GPU with ≥12 GB VRAM (e.g., T4 16 GB, free-tier Colab/Kaggle)
-- **CPU-only**: Mock backend available for testing (`--backend mock`)
-- **OS**: Linux or Windows (WSL2 recommended for GPU). `bitsandbytes` NF4 does **NOT** work on Apple-silicon Macs.
-- **Storage**: ~20 GB for two 4-bit models + embeddings
+`kg` is a hybrid, not a full knowledge graph. Semantic search picks up to 10 seed codes.
+Each seed adds its direct parent and up to 5 direct children, taken from the official
+ICD-10-CM 2024 tabular hierarchy. The pool is capped at 20, the same as RAG. No relation is
+invented.
 
-## Quick Start
+The strategies differ only in the evidence block. The system text, instruction, record,
+answer format, decoding settings, seed, dataset, parser and metrics are the same
+(`tests/test_strategies.py` checks this).
+
+---
+
+## Part 1: Google Colab setup (Tesla T4)
+
+You'll run everything in a Colab notebook. Each step below is one cell. Put `!` in front of
+shell commands, or use `%%bash` at the top of a cell.
+
+### 1.1 Choose the GPU
+Runtime → Change runtime type → **T4 GPU** → Save.
+
+Check it:
+```bash
+!nvidia-smi
+```
+
+### 1.2 Mount Google Drive (keeps the model cache and results between sessions)
+```python
+from google.colab import drive
+drive.mount('/content/drive')
+```
+
+### 1.3 Upload the project ZIP
+Either upload `icd10_four_strategies.zip` to `MyDrive/icd10/` in Drive (the easiest), or use
+the Files panel on the left of Colab.
+
+Unzip it into a fresh folder:
+```bash
+!rm -rf /content/icd10 && unzip -q "/content/drive/MyDrive/icd10/icd10_four_strategies.zip" -d /content/icd10
+```
+
+### 1.4 Install the pinned packages
+Do **not** install `torch`: Colab already provides the CUDA build.
+```bash
+!pip install -q "transformers==4.56.2" "accelerate==1.15.0" "bitsandbytes==0.50.2" "sentence-transformers==5.1.0" jsonlines tabulate pytest
+```
+
+### 1.5 Keep the model cache on Drive
+```python
+import os
+os.environ["HF_HOME"] = "/content/drive/MyDrive/hf_home"
+```
+Run this before any model download.
+
+### 1.6 Hugging Face access (only for LLaMA-3-8B)
+LLaMA-3-8B is gated. Accept the Meta licence on its Hugging Face page, then create a token
+at https://huggingface.co/settings/tokens and set it in Colab's **Secrets** panel (key icon)
+under the name `HF_TOKEN`. Then run:
+```python
+from google.colab import userdata
+import os
+os.environ["HF_TOKEN"] = userdata.get("HF_TOKEN")
+```
+BioMistral and LLaMA-3.2-3B do not need a token.
+
+---
+
+## Part 2: Build the official ICD-10-CM hierarchy (required for `kg`)
+
+The hierarchy comes from the **official CDC tabular file**. Nothing in this project is a
+substitute for it.
+
+### 2.1 Get the official CDC ZIP
+The file is `icd10cm-Table and Index-2024.zip` (about 22.7 MB), from the CDC FTP folder:
+`https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Publications/ICD10CM/2024/`
+
+**Option A (recommended, downloads inside Colab):**
+```bash
+!mkdir -p /content/icd10/data/raw && curl -L --fail --retry 3 -o "/content/icd10/data/raw/icd10cm-Table-and-Index-2024.zip" "https://ftp.cdc.gov/pub/Health_Statistics/NCHS/Publications/ICD10CM/2024/icd10cm-Table%20and%20Index-2024.zip"
+```
+
+**Option B (from your computer):** download the file in your browser from the folder above,
+then upload it into `/content/icd10/data/raw/` with the Colab Files panel, and rename it
+`icd10cm-Table-and-Index-2024.zip`.
+
+Check the file is a complete ZIP:
+```bash
+!python -c "import zipfile; z=zipfile.ZipFile('/content/icd10/data/raw/icd10cm-Table-and-Index-2024.zip'); print([i.filename for i in z.infolist()])"
+```
+If this prints a list of file names, the ZIP is complete. If it prints `BadZipFile`, the
+download was incomplete: run Option A again.
+
+### 2.2 Extract the XML and build the hierarchy
+The vocabulary must already exist (`data/vocab/icd10cm_2024.jsonl`, included in the ZIP).
+```bash
+%cd /content/icd10
+!python src/kg.py build --zip data/raw/icd10cm-Table-and-Index-2024.zip --xml data/raw/icd10cm_tabular_2024.xml --vocab data/vocab/icd10cm_2024.jsonl --out data/kg/icd10cm_2024_hierarchy.jsonl
+```
+
+What the build does:
+1. Extracts the one tabular XML file from the ZIP (its name must contain "tabular").
+2. Reads the parent and child relations from the XML.
+3. Checks the structure: no missing parents, no cycles, every code well-formed, and the
+   descriptions are present.
+4. Cross-checks the code set against the verified vocabulary. **Any mismatch stops the
+   build**, so a wrong file cannot be used by mistake.
+5. Writes `data/kg/icd10cm_2024_hierarchy.jsonl`.
+
+A successful build logs a `Validated hierarchy:` line with the counts. A failure stops with
+a message naming the problem, and no output file is written.
+
+### 2.3 Verify the hierarchy
+```bash
+!python -B -m pytest -q -rs tests/test_strategies.py -k real_official
+```
+This test runs only on the official file. It should pass, not skip. A skip means the XML was
+not extracted to `data/raw/`.
+
+Then spot-check a few codes:
+```bash
+!python -B -c "
+import sys; sys.path.insert(0, 'src')
+from kg import Hierarchy
+h = Hierarchy.from_jsonl('data/kg/icd10cm_2024_hierarchy.jsonl')
+for c in ['E11', 'E11.9', 'J18.9', 'I10']:
+    print(c, '| parent:', h.parent_of(c), '| children:', h.children_of(c)[:3], '|', h.desc.get(c, '')[:50])
+"
+```
+`E11.9` should have parent `E11`. `E11` should be a top-level code (parent `None`).
+
+---
+
+## Part 3: The 25-example pilot (all four strategies)
+
+Run this first. It takes a few minutes per strategy on a T4.
+
+Choose one model. Pick one of these keys:
+- `llama3` = LLaMA-3-8B-Instruct (needs `HF_TOKEN`)
+- `biomistral` = BioMistral-7B
+- `llama3.2-3b` = LLaMA-3.2-3B (public, smaller)
 
 ```bash
-# 1. Setup
-pip install -r requirements.txt
-
-# 2. Process vocabulary
-python src/vocab.py --config configs/phase1.yaml
-
-# 3. Generate synthetic data
-python src/synth_data.py --n-eval 200 --n-fewshot-pool 50 --n-dev 30 \
-    --implicit-rate 0.45 --seed 42 --max-words 200 --out data/synthetic/run01
-
-# 4. Run tests (CPU, no GPU needed)
-python -m pytest tests/ -v
-
-# 5. Smoke test with mock backend (CPU)
-python src/run_experiment.py --config configs/phase1.yaml \
-    --backend mock --strategies zero_shot few_shot rag \
-    --limit 20 --out results_mock/exp01
-
-# 6. Evaluate smoke results
-python src/evaluate.py --results-dir results_mock/exp01_smoke \
-    --data data/synthetic/run01/eval.jsonl \
-    --vocab data/vocab/icd10cm_2024.jsonl --allow-partial --dump-invalid 5
-
-# 7. Full Phase 1 run (requires GPU)
-export HF_TOKEN=<your_token>  # Accept LLaMA-3 licence first
-python src/run_experiment.py --config configs/phase1.yaml \
-    --models llama3 biomistral --strategies zero_shot few_shot rag \
-    --split eval --out results/exp01
-
-# 8. Evaluate
-python src/evaluate.py --results-dir results/exp01 \
-    --data data/synthetic/run01/eval.jsonl \
-    --vocab data/vocab/icd10cm_2024.jsonl --dump-invalid 5
-
-# 9. Phase 2: Significance testing
-python src/significance.py --results-dir results/exp01 \
-    --data data/synthetic/run01/eval.jsonl --seed 42 --B 10000
-
-# 10. Phase 2: Ablations
-python src/ablations.py --config configs/ablation_k.yaml --type k
+%cd /content/icd10
+!python src/run_experiment.py --config configs/phase1.yaml --models llama3 --strategies zero_shot few_shot rag kg --split eval --data data/synthetic/run01/eval.jsonl --limit 25 --out /content/drive/MyDrive/icd10/results/pilot_llama3
 ```
 
-## What Each Paper Number Maps To
+Output goes to `/content/drive/MyDrive/icd10/results/pilot_llama3_smoke/` (the `_smoke`
+suffix is added by `--limit`).
 
-| Paper Section | Source | Command |
-|---|---|---|
-| Table II (main results) | `evaluate.py` main table | `python src/evaluate.py --results-dir results/exp01 ...` |
-| §3.4 (dataset stats) | `stats.json` in synthetic dir | `python src/synth_data.py ...` |
-| §4.3 (invalid examples) | `evaluate.py --dump-invalid` | `python src/evaluate.py ... --dump-invalid 5` |
-| §4.4 (supplementary) | Table S1 from `evaluate.py` | Same as Table II |
-| §4.5 (MIMIC validation) | MIMIC run | `python src/data_prep.py ...` then same pipeline |
-| §4.6 (ablation tables) | `ablations.py` | `python src/ablations.py ...` |
-| §4.7 (significance) | `significance.py` | `python src/significance.py ...` |
+If Colab disconnects, run the same command again. Finished examples are skipped.
 
-## Models & Supported Backends
+**Check each strategy finished:**
+```bash
+!ls -la /content/drive/MyDrive/icd10/results/pilot_llama3_smoke/
+```
+You should see four `.jsonl` files: `llama3__zero_shot`, `llama3__few_shot`, `llama3__rag`
+and `llama3__kg`, each with 25 lines.
 
-The research pipeline supports evaluating **any open-source** or **commercial API** model:
+---
 
-| Model Category | Examples | Backend | Requirements / Notes |
-|---|---|---|---|
-| **Open-Source (HuggingFace)** | LLaMA-3-8B-Instruct (`llama3`), BioMistral-7B (`biomistral`), Qwen-2.5-7B (`qwen2.5-7b`) | `hf` | CUDA GPU (4-bit NF4 quantisation, ~5–6 GB VRAM) |
-| **Google Gemini API** | `gemini-1.5-flash`, `gemini-1.5-pro`, `gemini-2.0-flash` | `gemini` | `export GEMINI_API_KEY="..."` (Runs on CPU/GPU, fast) |
-| **OpenAI API** | `gpt-4o-mini`, `gpt-4o` | `openai` | `export OPENAI_API_KEY="..."` (Runs on CPU/GPU) |
-| **Anthropic Claude** | `claude-3-5-sonnet`, `claude-3-haiku` | `anthropic` | `export ANTHROPIC_API_KEY="..."` |
-| **Local OpenAI-Compatible** | Ollama / vLLM local endpoints | `openai` | Set `OPENAI_BASE_URL="http://localhost:11434/v1"` |
-| **Mock (Testing)** | Deterministic CPU mock | `mock` | CPU-only, no downloads or keys required |
-
-### Running Custom Models
-
-You can run any model by passing its key or model ID directly to `--models`:
+## Part 4: The comparison table
 
 ```bash
-# 1. Test Google Gemini (runs directly on CPU or GPU without heavy downloads)
-export GEMINI_API_KEY="your-api-key"
-python src/run_experiment.py --config configs/phase1.yaml \
-    --models gemini-1.5-flash --strategies zero_shot few_shot rag --out results/gemini_exp
-
-# 2. Test OpenAI GPT-4o-mini
-export OPENAI_API_KEY="your-api-key"
-python src/run_experiment.py --config configs/phase1.yaml \
-    --models gpt-4o-mini --strategies zero_shot few_shot rag --out results/openai_exp
-
-# 3. Test any Hugging Face model
-python src/run_experiment.py --config configs/phase1.yaml \
-    --models Qwen/Qwen2.5-7B-Instruct --strategies zero_shot few_shot rag --out results/qwen_exp
+%cd /content/icd10
+!python src/evaluate.py --results-dir /content/drive/MyDrive/icd10/results/pilot_llama3_smoke --data data/synthetic/run01/eval.jsonl --vocab data/vocab/icd10cm_2024.jsonl --allow-partial --dump-invalid 5
 ```
 
-## Project Structure
+`--allow-partial` is needed because 25 of the 200 eval examples were run. The table shows
+Precision, Recall, Micro-F1, Macro-F1, P@5, P@8 and the invalid-code rate, and a second table
+shows the unsupported-code rate, parse failures, truncation, and candidate recall for RAG and
+KG. The files are saved to `reports/` in the project folder.
 
-```
-├── README.md              # This file
-├── ASSUMPTIONS.md         # Every decision the paper leaves open
-├── requirements.txt       # Python dependencies
-├── Makefile               # Make targets: setup, vocab, data, smoke, phase1, evaluate, test, phase2
-├── configs/               # YAML configuration files
-│   ├── phase1.yaml        # Main experiment config
-│   ├── ablation_*.yaml    # Ablation configs
-│   └── mimic.yaml         # MIMIC-IV config
-├── data/                  # Data directory (gitignored except fixtures)
-│   ├── raw/               # Downloaded CDC files
-│   ├── vocab/             # Processed ICD-10-CM vocabulary
-│   ├── index/             # Embedding indices
-│   └── synthetic/         # Generated synthetic records
-├── src/                   # Source code
-│   ├── codes.py           # ICD-10 code normalization/validation
-│   ├── vocab.py           # CDC vocabulary download/parse
-│   ├── synth_data.py      # Synthetic data generator
-│   ├── templates/         # Condition library (YAML)
-│   ├── retrieval.py       # Embedding index & retrieval
-│   ├── prompts.py         # Prompt construction (3 strategies)
-│   ├── parser.py          # LLM output parser
-│   ├── backends.py        # LLM backend abstraction (HF, Mock)
-│   ├── run_experiment.py  # Inference harness
-│   ├── metrics.py         # Pure metric functions
-│   ├── evaluate.py        # Table generation
-│   ├── significance.py    # Paired bootstrap testing (Phase 2)
-│   ├── ablations.py       # Ablation orchestrator (Phase 2)
-│   ├── data_prep.py       # MIMIC-IV loader (Phase 2)
-│   └── utils.py           # Shared utilities
-├── tests/                 # pytest test suite
-├── results/               # Real experiment results (gitignored)
-├── results_mock/          # Mock results (gitignored)
-└── reports/               # Auto-generated tables
+For the full evaluation set, run Part 3 without `--limit`, and run the same evaluate command
+without `--allow-partial`:
+```bash
+%cd /content/icd10
+!python src/run_experiment.py --config configs/phase1.yaml --models llama3 biomistral --strategies zero_shot few_shot rag kg --split eval --data data/synthetic/run01/eval.jsonl --out /content/drive/MyDrive/icd10/results/exp01
+!python src/evaluate.py --results-dir /content/drive/MyDrive/icd10/results/exp01 --data data/synthetic/run01/eval.jsonl --vocab data/vocab/icd10cm_2024.jsonl --dump-invalid 5
 ```
 
-## Expected Runtime
+---
 
-| Stage | Hardware | Time |
+## Tests
+
+```bash
+%cd /content/icd10
+!python -m pytest -q -rs tests/
+```
+
+`-rs` prints the reason for every skipped test. The skips are expected: the CUDA float16
+test needs the GPU (it runs on Colab), and the official-hierarchy test runs only after Part 2.
+
+---
+
+## Leakage rules
+
+- `retrieval.retrieval_view()` is the only view of a record that any retriever receives:
+  `id`, `text`, `medications`. Gold fields are removed there, and RAG and KG both use it.
+- KG expansion reads only the hierarchy file. Its seeds come from the same view.
+- The few-shot pool is checked for disjointness from the evaluation records by ID and text hash.
+
+## Models and settings
+
+| Key | Model | Notes |
 |---|---|---|
-| Vocab processing | CPU | <1 min |
-| Synthetic generation | CPU | <1 min |
-| Index building | CPU | ~5 min |
-| Smoke test (mock, 20 inst) | CPU | <1 min |
-| Full Phase 1 (200×6 configs) | T4 GPU | ~2–6 hours |
-| Significance (B=10,000) | CPU | ~2 min |
-| Ablations | T4 GPU | ~4–8 hours |
+| `llama3` | `meta-llama/Meta-Llama-3-8B-Instruct` | gated; needs `HF_TOKEN` |
+| `biomistral` | `BioMistral/BioMistral-7B` | prepended system text (no system role) |
+| `llama3.2-3b` | `unsloth/Llama-3.2-3B-Instruct-bnb-4bit` | public, smaller |
 
-## Reproducibility
+All HF models: 4-bit NF4, float16 compute on CUDA (checked and written to every row),
+`max_new_tokens: 256`, greedy decoding, batch size 1, context limit as in `configs/phase1.yaml`.
 
-- All random choices flow from `seed` in config (default: 42)
-- Same inputs + code → same dataset, shots, retrieval, outputs
-- GPU numerical non-determinism is noted but minimized via `torch.use_deterministic_algorithms`
-- Every result row carries its seed, config hash, and timestamp
+## Known limits
 
-## Resumability
+- KG expansion takes at most 5 children per seed, in XML order, with no relevance ranking.
+  This is a fixed, documented choice.
+- The duplicate-BOS fix is applied to the LLaMA-3 models (see `CHANGELOG.md`). BioMistral's
+  chat template was not available to check, so it keeps the default setting.
+- The model runs have not been executed in this environment. Results come from the Colab runs.
 
-All long runs are crash-safe:
-- Results are appended one line at a time with `flush+fsync`
-- On restart, completed instance IDs are skipped
-- At most one instance is lost on crash
+## RAGAS ID-Based Retrieval Evaluation
 
-## Privacy (MIMIC-IV)
+Install the optional evaluation dependencies:
 
-- MIMIC data never leaves the local machine
-- Never committed to version control
-- Result files contain only IDs, codes, and token counts (no raw note text)
-- Output directory must not be inside a git-tracked path
+```bash
+pip install -r requirements-ragas.txt
+```
 
+Evaluate saved RAG outputs without rerunning model inference:
+
+```bash
+python src/evaluate_ragas.py \
+  --results-dir results/pilot_llama3_smoke \
+  --data data/synthetic/run01/eval.jsonl \
+  --out-dir results/pilot_llama3_ragas
+```
+
+This evaluation uses RAGAS ID-based Context Precision and Context
+Recall to compare retrieved ICD-10-CM code IDs against gold codes.
+These metrics measure exact code overlap, not semantic relevance
+or LLM-judged faithfulness.

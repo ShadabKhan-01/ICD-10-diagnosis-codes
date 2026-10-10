@@ -16,6 +16,19 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+def retrieval_view(record: dict) -> dict:
+    """The only part of a record that retrieval may see.
+
+    Gold labels (gold_codes, implicit_codes, explicit_codes, distractors) are excluded
+    here, so no retriever can read the answer. All strategies go through this view.
+    """
+    return {
+        "id": record.get("id"),
+        "text": record.get("text", "") or "",
+        "medications": list(record.get("medications", []) or []),
+    }
+
+
 @dataclass
 class Candidate:
     """A single retrieved ICD-10-CM code candidate."""

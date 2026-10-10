@@ -27,7 +27,7 @@ def generate_record(record_id, conditions, all_codes_list, vocab, implicit_rate,
     # Sample 3-6 conditions
     n_cond = random.randint(3, 6)
     weights = [c.get('weight', 1.0) for c in conditions]
-    
+
     # Random choices with weights
     selected_conditions = []
     # Weighted sampling without replacement
@@ -51,7 +51,7 @@ def generate_record(record_id, conditions, all_codes_list, vocab, implicit_rate,
     explicit_phrases = []
     implicit_objs = []
     distractors = []
-    
+
     for c in selected_conditions:
         code = c['code']
         gold_codes.append(code)
@@ -73,7 +73,7 @@ def generate_record(record_id, conditions, all_codes_list, vocab, implicit_rate,
     n_distractors = random.randint(1, 3)
     distractor_candidates = [c for c in conditions if c['code'] not in gold_codes]
     distractor_conds = random.sample(distractor_candidates, min(n_distractors, len(distractor_candidates)))
-    
+
     distractor_text_parts = []
     for c in distractor_conds:
         dtype = random.choice(['negation', 'family', 'med'])
@@ -87,38 +87,38 @@ def generate_record(record_id, conditions, all_codes_list, vocab, implicit_rate,
         else:
             if c.get('negation_phrases'):
                 distractor_text_parts.append(random.choice(c['negation_phrases']))
-    
+
     # Rendering
     sections = []
     sections.append(f"CHIEF COMPLAINT:\nPatient presents for evaluation.")
-    
+
     hpi = "HISTORY OF PRESENT ILLNESS:\nPatient is a 65-year-old presenting with multiple chronic conditions."
     if labs:
         hpi += " Recent labs showed " + ", ".join(labs) + "."
     if distractor_text_parts:
         hpi += " " + " ".join(distractor_text_parts).capitalize() + "."
     sections.append(hpi)
-    
+
     pmh = "PAST MEDICAL HISTORY:\n"
     if explicit_phrases:
         pmh += ", ".join(explicit_phrases).capitalize() + "."
     sections.append(pmh)
-    
+
     hospital_course = "HOSPITAL COURSE:\nPatient was admitted and stabilized. Monitored closely for all active issues."
     sections.append(hospital_course)
-    
+
     meds_section = "DISCHARGE MEDICATIONS:\n" + "\n".join(f"- {m}" for m in medications) if medications else "DISCHARGE MEDICATIONS:\nNone"
     sections.append(meds_section)
-    
+
     dx_section = "DISCHARGE DIAGNOSIS:\n"
     if explicit_phrases:
         dx_section += "\n".join(f"- {p}" for p in explicit_phrases)
     else:
         dx_section += "Pending."
     sections.append(dx_section)
-    
+
     text = "\n\n".join(sections)
-    
+
     # Length constraint
     words = text.split()
     if len(words) > max_words:
@@ -127,27 +127,27 @@ def generate_record(record_id, conditions, all_codes_list, vocab, implicit_rate,
         pmh_idx = text.find("PAST MEDICAL HISTORY:")
         if pmh_idx > hpi_idx and hpi_idx != -1:
             pass # Keep it simple, just truncate words but maintain structure if possible, wait, just truncate and append "..."
-        
+
         words = words[:max_words]
         text = " ".join(words) + " ..."
-    
+
     n_words = len(text.split())
-    
+
     # Hard Checks
     # Implicit codes never appear by name in text
     for c in implicit_objs:
         if check_overlap(text, c['explicit_phrases']):
             raise ValueError(f"Implicit code {c['code']} appeared explicitly in text!")
-            
+
     # No gold code is distractor
     overlap = set(gold_codes).intersection(set(distractors))
     if overlap:
         raise ValueError(f"Gold codes and distractors overlap: {overlap}")
-        
+
     for gc in gold_codes:
         if not vocab.is_valid(gc):
             raise ValueError(f"Gold code {gc} is invalid!")
-            
+
     return {
         "id": f"rec_{record_id:05d}",
         "text": text,
@@ -169,28 +169,28 @@ def main():
     parser.add_argument("--max-words", type=int, default=200)
     parser.add_argument("--out", type=str, required=True)
     args = parser.parse_args()
-    
+
     random.seed(args.seed)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    
+
     logger.info("Loading vocabulary...")
     vocab = Vocabulary.load_or_download({})
-    
+
     logger.info("Loading conditions...")
     conditions = load_conditions("src/templates/conditions.yaml")
-    
+
     for c in conditions:
         if not vocab.is_valid(c['code']):
             logger.error(f"Template code {c['code']} is invalid in vocabulary!")
             return
-            
+
     total_records = args.n_eval + args.n_fewshot_pool + args.n_dev
     records = []
-    
+
     text_hashes = set()
     all_codes = [c['code'] for c in conditions]
-    
+
     logger.info(f"Generating {total_records} records...")
     attempts = 0
     while len(records) < total_records and attempts < total_records * 10:
@@ -198,7 +198,7 @@ def main():
         try:
             rec = generate_record(len(records) + 1, conditions, all_codes, vocab, args.implicit_rate, args.max_words)
             rec['seed'] = args.seed
-            
+
             # check disjoint
             thash = hashlib.md5(rec['text'].encode()).hexdigest()
             if thash in text_hashes:
@@ -207,26 +207,26 @@ def main():
             records.append(rec)
         except Exception as e:
             logger.debug(f"Skipped record due to error: {e}")
-            
+
     if len(records) < total_records:
         logger.error(f"Could only generate {len(records)} unique records.")
         return
-        
+
     dev_recs = records[:args.n_dev]
     fewshot_recs = records[args.n_dev:args.n_dev+args.n_fewshot_pool]
     eval_recs = records[args.n_dev+args.n_fewshot_pool:]
-    
+
     def write_jsonl(recs, filename):
         for rec in recs:
             rec["split"] = filename.replace(".jsonl", "")
         with open(out_dir / filename, 'w', encoding='utf-8') as f:
             for r in recs:
                 f.write(json.dumps(r) + "\n")
-                
+
     write_jsonl(dev_recs, "dev.jsonl")
     write_jsonl(fewshot_recs, "fewshot_pool.jsonl")
     write_jsonl(eval_recs, "eval.jsonl")
-    
+
     # Stats
     all_gold = []
     implicit_count = 0
@@ -238,7 +238,7 @@ def main():
         total_words += r['n_words']
         for gc in r['gold_codes']:
             freqs[gc] = freqs.get(gc, 0) + 1
-            
+
     stats = {
         "total_records": len(records),
         "unique_gold_codes": len(set(all_gold)),
@@ -247,10 +247,10 @@ def main():
         "percent_implicit": (implicit_count / len(all_gold) * 100) if all_gold else 0,
         "code_frequencies": freqs
     }
-    
+
     with open(out_dir / "stats.json", "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2)
-        
+
     logger.info("Done.")
 
 if __name__ == "__main__":

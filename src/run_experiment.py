@@ -33,6 +33,8 @@ from prompts import (
     build_messages,
 )
 from backends import HFBackend, MockBackend, create_backend
+from retrieval import retrieval_view
+from kg import Hierarchy, KGRetriever
 from utils import (
     seed_everything, sha256_file, sha256_str, atomic_write,
     atomic_jsonl_append, gpu_info, library_versions, git_commit,
@@ -117,6 +119,89 @@ def select_few_shots(
     return selected[:k]
 
 
+# ── Semantic retriever (shared by RAG and KG) ──────────────────────────────
+
+def _load_vocab(config: dict):
+    """Load the processed ICD-10-CM vocabulary, or None if it is missing (logged)."""
+    vocab_path = config.get("vocab", {}).get("vocab_path", "data/vocab/icd10cm_2024.jsonl")
+    try:
+        from vocab import Vocabulary
+        if Path(vocab_path).exists():
+            return Vocabulary.load_or_download(config.get("vocab", {}))
+        logger.warning(f"Vocabulary not found at {vocab_path}; retrieval descriptions will be empty.")
+        return None
+    except Exception as e:
+        logger.warning(f"Could not load vocab for retrieval: {e}")
+        return None
+
+
+def get_semantic_retriever(config: dict, cache: dict, mock: bool):
+    """Build (once per run) the MiniLM retriever used by both RAG and KG.
+
+    Returns None if sentence-transformers is missing and the backend is not mock; the
+    error is logged. The cache keeps one index in memory no matter how many strategies
+    use it.
+    """
+    key = "mock" if mock else "semantic"
+    if key in cache:
+        return cache[key]
+
+    vocab = _load_vocab(config)
+    rag_k = config.get("strategies", {}).get("rag", {}).get("k", 20)
+    retrieval_cfg = config.get("retrieval", {})
+
+    if mock:
+        from retrieval import MockRetriever
+        retriever = MockRetriever(vocab=vocab, k=rag_k)
+    else:
+        try:
+            import sentence_transformers  # noqa: F401
+        except ImportError:
+            logger.error(
+                "\n" + "=" * 60 + "\n"
+                "RAG and KG strategies require 'sentence-transformers', which is not installed.\n"
+                "  1. Run: pip install sentence-transformers\n"
+                "  2. Or run on Google Colab GPU: !pip install sentence-transformers\n"
+                "Skipping RAG/KG (zero_shot and few_shot results are preserved).\n"
+                + "=" * 60
+            )
+            return None
+
+        embedder = retrieval_cfg.get("embedder", "sentence-transformers/all-MiniLM-L6-v2")
+        index_dir = retrieval_cfg.get("index_dir", "data/index")
+        index_path = os.path.join(index_dir, embedder.replace("/", "_"))
+        meta_file = Path(index_path) / "meta.json"
+        if vocab and not meta_file.exists():
+            from retrieval import build_index
+            build_index(embedder, vocab, index_path)
+
+        from retrieval import Retriever
+        retriever = Retriever(
+            embedder_name=embedder,
+            index_dir=index_path,
+            vocab=vocab,
+            k=rag_k,
+            per_query_m=config.get("strategies", {}).get("rag", {}).get("per_query_m", 30),
+            note_window_words=retrieval_cfg.get("note_window_words", 150),
+            note_window_overlap=retrieval_cfg.get("note_window_overlap", 30),
+        )
+    cache[key] = retriever
+    return retriever
+
+
+def load_kg_hierarchy(config: dict) -> Hierarchy:
+    """Load the official ICD-10-CM hierarchy for the KG strategy. Fails loudly if missing."""
+    path = config.get("kg", {}).get("hierarchy_path", "data/kg/icd10cm_2024_hierarchy.jsonl")
+    if not Path(path).exists():
+        raise FileNotFoundError(
+            f"KG hierarchy not found: {path}\n"
+            "Build it from the official CDC zip (icd10cm-Table and Index-2024.zip):\n"
+            "  python src/kg.py build --zip data/raw/icd10cm-Table-and-Index-2024.zip "
+            "--xml data/raw/icd10cm_tabular_2024.xml --out " + path
+        )
+    return Hierarchy.from_jsonl(path)
+
+
 # ── Context overflow handling ──────────────────────────────────────────────
 
 SECTION_HEADERS = [
@@ -175,7 +260,7 @@ def parse_args():
     p.add_argument("--config", required=True, help="Path to YAML config")
     p.add_argument("--models", nargs="+", help="Model keys (e.g., llama3 biomistral)")
     p.add_argument("--strategies", nargs="+",
-                    choices=["zero_shot", "few_shot", "rag"],
+                    choices=["zero_shot", "few_shot", "rag", "kg"],
                     help="Strategies to run")
     p.add_argument("--split", default="eval", help="Dataset split")
     p.add_argument("--data", help="Direct path to dataset JSONL (e.g. data/synthetic/run01/eval.jsonl)")
@@ -184,6 +269,9 @@ def parse_args():
                    choices=["auto", "hf", "mock", "gemini", "openai", "anthropic"],
                    help="LLM backend: auto (inferred from model name), hf, mock, gemini, openai, anthropic")
     p.add_argument("--limit", type=int, help="Limit instances (smoke test)")
+    p.add_argument("--allow-cpu", action="store_true",
+                   help="HF models only: run NF4 on CPU when no CUDA GPU exists. SMOKE TESTS ONLY; "
+                        "outputs are not comparable to the CUDA research setting.")
     return p.parse_args()
 
 
@@ -288,6 +376,7 @@ def main():
     atomic_write(str(out_dir / "run_meta.json"), json.dumps(run_meta, indent=2))
 
     # ── Model loop ─────────────────────────────────────────────────────
+    retriever_cache: dict = {}  # one semantic retriever per run, shared by RAG and KG
     models_to_run = args.models or list(config.get("models", {}).keys())
     decoding_cfg = config.get("decoding", {})
     max_new_tokens = decoding_cfg.get("max_new_tokens", 256)
@@ -325,6 +414,8 @@ def main():
             template_mode=template_mode,
             seed=seed,
             stop_tokens=stop_tokens,
+            tokenize_special_tokens=model_cfg.get("tokenize_special_tokens", True),
+            allow_cpu=args.allow_cpu,
         )
 
         backend.load()
@@ -343,61 +434,33 @@ def main():
                     logger.error("No few-shot examples available, skipping")
                     continue
                 evidence_provider = FewShotEvidence(shots)
-            elif strategy == "rag":
-                vocab_path = config.get("vocab", {}).get("vocab_path", "data/vocab/icd10cm_2024.jsonl")
-                try:
-                    from vocab import Vocabulary
-                    if Path(vocab_path).exists():
-                        vocab = Vocabulary.load_or_download(config.get("vocab", {}))
-                    else:
-                        vocab = None
-                except Exception as e:
-                    logger.warning(f"Could not load vocab for RAG: {e}")
-                    vocab = None
-
-                rag_k = config.get("strategies", {}).get("rag", {}).get("k", 20)
-
-                if backend_info.get("backend") == "mock":
-                    from retrieval import MockRetriever
-                    retriever = MockRetriever(vocab=vocab, k=rag_k)
+            elif strategy in ("rag", "kg"):
+                # RAG and KG share one semantic retriever (same index, embedder, windows).
+                use_mock = backend_info.get("backend") == "mock"
+                retriever = get_semantic_retriever(
+                    config, retriever_cache, mock=use_mock,
+                )
+                if retriever is None:
+                    continue  # sentence-transformers missing; error already logged
+                if strategy == "rag":
+                    evidence_provider = RAGEvidence(retriever)
                 else:
-                    try:
-                        import sentence_transformers
-                    except ImportError:
-                        logger.error(
-                            "\n" + "=" * 60 + "\n"
-                            "RAG strategy requires 'sentence-transformers', which is not installed.\n"
-                            "To enable RAG:\n"
-                            "  1. Run: pip install sentence-transformers\n"
-                            "  2. Or run on Google Colab GPU: !pip install sentence-transformers\n"
-                            "Skipping RAG strategy for now (zero_shot and few_shot results are preserved).\n"
-                            + "=" * 60
+                    kg_cfg = config.get("strategies", {}).get("kg", {})
+                    rag_k_cfg = config.get("strategies", {}).get("rag", {}).get("k", 20)
+                    if kg_cfg.get("k", 20) != rag_k_cfg:
+                        # Fairness: KG and RAG must offer the same number of candidates.
+                        raise ValueError(
+                            f"strategies.kg.k ({kg_cfg.get('k', 20)}) must equal "
+                            f"strategies.rag.k ({rag_k_cfg}) so both arms get the same pool size."
                         )
-                        continue
-
-                    embedder = retrieval_cfg.get("embedder", "sentence-transformers/all-MiniLM-L6-v2")
-                    index_dir = retrieval_cfg.get("index_dir", "data/index")
-                    embedder_slug = embedder.replace("/", "_")
-                    index_path = os.path.join(index_dir, embedder_slug)
-
-                    meta_file = Path(index_path) / "meta.json"
-                    if vocab and not meta_file.exists():
-                        from retrieval import build_index
-                        build_index(embedder, vocab, index_path)
-
-                    from retrieval import Retriever
-                    per_query_m = config.get("strategies", {}).get("rag", {}).get("per_query_m", 30)
-
-                    retriever = Retriever(
-                        embedder_name=embedder,
-                        index_dir=index_path,
-                        vocab=vocab,
-                        k=rag_k,
-                        per_query_m=per_query_m,
-                        note_window_words=retrieval_cfg.get("note_window_words", 150),
-                        note_window_overlap=retrieval_cfg.get("note_window_overlap", 30),
-                    )
-                evidence_provider = RAGEvidence(retriever)
+                    hierarchy = load_kg_hierarchy(config)
+                    evidence_provider = RAGEvidence(KGRetriever(
+                        retriever,
+                        hierarchy,
+                        k=kg_cfg.get("k", 20),
+                        seed_k=kg_cfg.get("seed_k", 10),
+                        max_children=kg_cfg.get("max_children", 5),
+                    ))
             else:
                 logger.warning(f"Unknown strategy '{strategy}', skipping")
                 continue
@@ -449,13 +512,16 @@ def main():
                 gen_result = backend.generate(messages, max_new_tokens)
 
                 # Parse output
-                parsed_codes, parse_mode = parse_output(gen_result.text)
+                parsed_codes, parse_mode = parse_output(
+                    gen_result.text,
+                    generation_truncated=bool(gen_result.generation_truncated),
+                )
 
                 # Build retrieved info for RAG
                 retrieved_info = []
-                if strategy == "rag" and hasattr(evidence_provider, "retriever"):
+                if strategy in ("rag", "kg") and hasattr(evidence_provider, "retriever"):
                     try:
-                        cands = evidence_provider.retriever.retrieve(record)
+                        cands = evidence_provider.retriever.retrieve(retrieval_view(record))
                         retrieved_info = [
                             {"code": c.code, "score": c.score, "query_source": c.source_query}
                             for c in cands
@@ -478,10 +544,12 @@ def main():
                     "new_tokens": gen_result.new_tokens,
                     "overflow": overflow,
                     "truncated": truncated,
+                    "generation_truncated": gen_result.generation_truncated,
+                    "compute_dtype": backend_info.get("dtype", ""),
                     "parse_mode": parse_mode,
                     "raw_output": gen_result.text,
                     "parsed_codes": parsed_codes,
-                    "retrieved": retrieved_info if strategy == "rag" else [],
+                    "retrieved": retrieved_info if strategy in ("rag", "kg") else [],
                     "shots": shot_ids if strategy == "few_shot" else [],
                     "latency_s": gen_result.latency_s,
                     "gpu": backend_info.get("device", ""),

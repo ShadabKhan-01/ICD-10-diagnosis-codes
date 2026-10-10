@@ -10,6 +10,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional, Any, Tuple
 
+from retrieval import retrieval_view
+
 logger = logging.getLogger(__name__)
 
 # ── Fixed text (identical across all arms) ──────────────────────────────────
@@ -76,7 +78,8 @@ class RAGEvidence(EvidenceProvider):
         self.retriever = retriever
 
     def build_evidence(self, record: dict) -> str:
-        candidates = self.retriever.retrieve(record)
+        # Retrieval sees only the no-gold view of the record (see retrieval.retrieval_view).
+        candidates = self.retriever.retrieve(retrieval_view(record))
         header = (
             "Candidate ICD-10-CM codes retrieved for this record "
             "(you may use them, ignore them, or add another code "

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- TEST FIXTURE, NOT THE CDC FILE. Same nesting as the official ICD-10-CM tabular XML
+     (chapter > section > diag > diag). Used only to test parsing and KG expansion.
+     Undotted names (A000) check that normalisation matches the rest of the pipeline. -->
+<ICD10CM.tabular>
+  <chapter>
+    <name>1</name>
+    <desc>Certain infectious and parasitic diseases</desc>
+    <section id="A00-A09">
+      <desc>Intestinal infectious diseases</desc>
+      <diag>
+        <name>A00</name>
+        <desc>Cholera</desc>
+        <diag>
+          <name>A000</name>
+          <desc>Cholera due to Vibrio cholerae 01, biovar cholerae</desc>
+        </diag>
+        <diag>
+          <name>A001</name>
+          <desc>Cholera due to Vibrio cholerae 01, biovar eltor</desc>
+        </diag>
+      </diag>
+      <diag>
+        <name>A02</name>
+        <desc>Other salmonella infections</desc>
+        <diag>
+          <name>A021</name>
+          <desc>Salmonella sepsis</desc>
+        </diag>
+      </diag>
+    </section>
+  </chapter>
+  <chapter>
+    <name>9</name>
+    <desc>Diseases of the circulatory system</desc>
+    <section id="I10-I1A">
+      <desc>Hypertensive diseases</desc>
+      <diag>
+        <name>I10</name>
+        <desc>Essential (primary) hypertension</desc>
+      </diag>
+    </section>
+  </chapter>
+</ICD10CM.tabular>
