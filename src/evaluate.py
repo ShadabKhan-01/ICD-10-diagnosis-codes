@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from codes import normalize
-from vocab import Vocabulary  
+from vocab import Vocabulary
 from metrics import micro_f1, macro_f1_gold_set, precision_at_k, invalid_code_rate, unsupported_code_rate, compute_all_metrics
 from parser import parse_failure_rate, parse_output
 from utils import sha256_file, sha256_str
@@ -40,6 +40,10 @@ def map_model_name(raw_name: str) -> str:
         return 'Claude-3.5-Sonnet'
     if 'claude' in lower_name:
         return 'Claude-3-Haiku'
+    # Specific LLaMA-3.2-3B key must be checked before the generic 'llama' match,
+    # otherwise its rows would be labelled as the 8B model.
+    if 'llama3.2-3b' in lower_name:
+        return 'LLaMA-3.2-3B-Instruct'
     if 'llama' in lower_name:
         return 'LLaMA-3-8B-Instruct'
     if 'biomistral' in lower_name:
@@ -56,10 +60,12 @@ def sort_key(row):
         'Few-Shot (k=5)': 2,
         'Few-Shot': 2,
         'RAG': 3,
+        'KG': 4,
     }.get(row.get('Strategy', ''), 99)
 
     model_order = [
         'LLaMA-3-8B-Instruct',
+        'LLaMA-3.2-3B-Instruct',
         'BioMistral-7B',
         'Gemini-3.8-Flash',
         'Gemini-1.5-Flash',
@@ -112,12 +118,12 @@ def run_sanity_checks(gold_records, vocab_valid_set):
     gold_sets = [set(g['gold_codes']) for g in gold_records.values()]
     pred_lists = [list(g['gold_codes']) for g in gold_records.values()]
     metrics = compute_all_metrics(pred_lists, gold_sets, vocab_valid_set)
-    
+
     if abs(metrics['micro_f1'] - 1.0) > 1e-5 or abs(metrics['macro_f1'] - 1.0) > 1e-5:
         logger.warning(f"Sanity Check Failed: Gold-as-prediction F1 is not 1.0! Got {metrics['micro_f1']}")
     if metrics['invalid_code_rate'] > 1e-5 or metrics['unsupported_code_rate'] > 1e-5:
         logger.warning("Sanity Check Failed: Gold-as-prediction has invalid/unsupported codes!")
-        
+
     empty_preds = [[] for _ in gold_records.values()]
     empty_metrics = compute_all_metrics(empty_preds, gold_sets, vocab_valid_set)
     if empty_metrics['micro_f1'] > 1e-5 or empty_metrics['macro_f1'] > 1e-5:
@@ -168,28 +174,29 @@ def main():
             model_raw, strategy = parts[0], parts[1]
         else:
             model_raw, strategy = filename, "Unknown"
-            
+
         model = map_model_name(model_raw)
         strategy_map = {
             'zero_shot': 'Zero-Shot',
             'few_shot': 'Few-Shot (k=5)',
             'rag': 'RAG',
+            'kg': 'KG',
         }
         strategy = strategy_map.get(strategy, strategy)
-            
+
         with open(res_file, 'r', encoding='utf-8') as f:
             for line in f:
                 if not line.strip(): continue
                 record = json.loads(line)
-                
+
                 backend = record.get('backend', 'unknown')
                 all_backends.add(backend)
-                
+
                 if 'parsed_codes' not in record and 'raw_output' in record:
                     record['parsed_codes'], record['parse_mode'] = parse_output(record['raw_output'])
                 elif 'parsed_codes' not in record:
                     record['parsed_codes'] = []
-                    
+
                 results_by_config[(model, strategy)].append(record)
 
                 if args.dump_invalid > 0 and len(invalid_codes_dump) < args.dump_invalid:
@@ -215,16 +222,16 @@ def main():
 
     table2_rows = []
     table_s1_rows = []
-    
+
     for (model, strategy), records in results_by_config.items():
         res_ids = {r['id'] for r in records}
         gold_ids = set(gold_records.keys())
-        
+
         missing_from_gold = res_ids - gold_ids
         if missing_from_gold:
             logger.error(f"Config {model} {strategy} has {len(missing_from_gold)} ids missing from gold dataset.")
             sys.exit(1)
-            
+
         if len(res_ids) != len(gold_ids):
             if args.allow_partial:
                 logger.warning(f"Config {model} {strategy} has {len(res_ids)} results, expected {len(gold_ids)}.")
@@ -236,26 +243,26 @@ def main():
         records.sort(key=lambda r: r['id'])
         pred_lists = [r['parsed_codes'] for r in records]
         gold_sets = [set(gold_records[r['id']]['gold_codes']) for r in records]
-        
+
         metrics = compute_all_metrics(pred_lists, gold_sets, vocab_valid_set)
-        
+
         # Additional table S1 metrics
         parse_modes = [r.get('parse_mode', 'success') for r in records]
         pf_rate = parse_failure_rate(parse_modes)
         n = len(records)
         overflow_rate = sum(1 for r in records if r.get('overflow')) / n if n else 0.0
         truncation_rate = sum(1 for r in records if r.get('truncated')) / n if n else 0.0
-        
+
         total_emitted = sum(len(p) for p in pred_lists)
         mean_emitted = total_emitted / n if n else 0.0
-        
+
         latencies = [r.get('latency_s', 0) for r in records if r.get('latency_s') is not None]
         mean_latency = sum(latencies) / len(latencies) if latencies else 0.0
-        
+
         gpu = records[0].get('gpu', 'unknown') if records else 'unknown'
-        
+
         candidate_recall = 0.0
-        if strategy == "RAG":
+        if strategy in ("RAG", "KG"):
             candidate_recalls = []
             for r, g in zip(records, gold_sets):
                 raw_cands = r.get('retrieved', [])
@@ -275,6 +282,8 @@ def main():
             'Model': model,
             'Strategy': strategy,
             'n': n,
+            'Precision': metrics['micro_precision'],
+            'Recall': metrics['micro_recall'],
             'Micro-F1': metrics['micro_f1'],
             'Macro-F1': metrics['macro_f1'],
             'P@5': metrics['p5'],
@@ -295,7 +304,7 @@ def main():
             'n_p8': n_p8,
             'Mean Latency (s)': mean_latency,
             'GPU': gpu,
-            'Candidate Recall@k': candidate_recall if strategy == "RAG" else None
+            'Candidate Recall@k': candidate_recall if strategy in ("RAG", "KG") else None
         }
         table_s1_rows.append(s1_row)
 
@@ -317,12 +326,14 @@ def main():
     def format_t2_row(r):
         return (
             f"| {r['Model']} | {r['Strategy']} | {r['n']} | "
+            f"{_fmt_f1(r['Precision'])} | {_fmt_f1(r['Recall'])} | "
             f"{_fmt_f1(r['Micro-F1'])} | {_fmt_f1(r['Macro-F1'])} | "
             f"{_fmt_f1(r['P@5'])} | {_fmt_f1(r['P@8'])} | "
             f"{_fmt_pct(r['Invalid Code Rate'])} |"
         )
 
-    t2_header = "| Model | Strategy | n | Micro-F1 | Macro-F1 | P@5 | P@8 | Invalid Code Rate |\n|---|---|---|---|---|---|---|---|"
+    t2_header = ("| Model | Strategy | n | Precision | Recall | Micro-F1 | Macro-F1 | P@5 | P@8 "
+                 "| Invalid Code Rate |\n|---|---|---|---|---|---|---|---|---|---|")
     t2_md = t2_header + "\n" + "\n".join(format_t2_row(r) for r in table2_rows)
 
     def format_s1_row(r):
@@ -344,16 +355,17 @@ def main():
 
     reports_dir = Path("reports")
     reports_dir.mkdir(exist_ok=True)
-    
+
     with open(reports_dir / "table2.md", "w") as f:
         f.write(t2_md)
-        
+
     with open(reports_dir / "table2.csv", "w") as f:
-        f.write("Model,Strategy,n,Micro-F1,Macro-F1,P@5,P@8,Invalid Code Rate\n")
+        f.write("Model,Strategy,n,Precision,Recall,Micro-F1,Macro-F1,P@5,P@8,Invalid Code Rate\n")
         for r in table2_rows:
             p5 = f"{r['P@5']:.3f}" if r['P@5'] is not None else "n/a"
             p8 = f"{r['P@8']:.3f}" if r['P@8'] is not None else "n/a"
-            f.write(f"{r['Model']},{r['Strategy']},{r['n']},{r['Micro-F1']:.3f},{r['Macro-F1']:.3f},{p5},{p8},{r['Invalid Code Rate']*100:.1f}%\n")
+            f.write(f"{r['Model']},{r['Strategy']},{r['n']},{r['Precision']:.3f},{r['Recall']:.3f},"
+                    f"{r['Micro-F1']:.3f},{r['Macro-F1']:.3f},{p5},{p8},{r['Invalid Code Rate']*100:.1f}%\n")
 
     with open(reports_dir / "table2.json", "w") as f:
         json.dump({'config_hashes': {}, 'rows': table2_rows}, f, indent=2)
@@ -371,7 +383,7 @@ def main():
     # Simplistic implementation: just 0 for now as true frequent codes require fewshot pool access which isn't provided here,
     # or one could compute from gold dataset, but prompt says "compute and print". We just mock it if real data not available.
     print("Majority-code baseline: (Not implemented in script context)")
-    
+
     # Retrieval-only baseline
     for (model, strategy), records in results_by_config.items():
         if strategy == "RAG":

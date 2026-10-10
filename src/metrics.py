@@ -198,8 +198,12 @@ def compute_all_metrics(
     ucr = unsupported_code_rate(pred_lists, gold_sets, vocab_valid_set)
     tps = tp_share(pred_lists, gold_sets, vocab_valid_set)
 
+    micro_p, micro_r = micro_precision_recall(pred_sets, gold_sets)
+
     return {
         "micro_f1": micro_f1(pred_sets, gold_sets),
+        "micro_precision": micro_p,
+        "micro_recall": micro_r,
         "macro_f1": macro_f1_gold_set(pred_sets, gold_sets),
         "p5": p5,
         "n_p5": n_p5,
@@ -210,4 +214,19 @@ def compute_all_metrics(
         "tp_share": tps,
         "mean_codes_emitted": mean_emitted,
     }
+
+
+def micro_precision_recall(pred_sets: List[Set[str]], gold_sets: List[Set[str]]) -> Tuple[float, float]:
+    """Pooled micro precision = TP/(TP+FP) and micro recall = TP/(TP+FN).
+
+    Returns (0.0, 0.0) for a zero denominator. Same TP/FP/FN pooling as micro_f1.
+    """
+    tp = fp = fn = 0
+    for p, g in zip(pred_sets, gold_sets):
+        tp += len(p & g)
+        fp += len(p - g)
+        fn += len(g - p)
+    precision = (tp / (tp + fp)) if (tp + fp) > 0 else 0.0
+    recall = (tp / (tp + fn)) if (tp + fn) > 0 else 0.0
+    return precision, recall
 

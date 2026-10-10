@@ -95,11 +95,29 @@ def _retry_post(
 
 @dataclass
 class GenResult:
-    """Result of a single LLM generation."""
+    """Result of a single LLM generation.
+
+    generation_truncated: True if generation stopped because max_new_tokens was
+    reached (output may be incomplete). None when the backend cannot tell.
+    """
     text: str
     prompt_tokens: int
     new_tokens: int
     latency_s: float
+    generation_truncated: Optional[bool] = None
+
+
+def detect_generation_truncated(new_token_ids: List[int], max_new_tokens: int,
+                                stop_ids: List[int]) -> bool:
+    """True if the generation ran to the token limit without emitting a stop token.
+
+    A response that is exactly max_new_tokens long but ends with a stop token is complete.
+    """
+    if len(new_token_ids) < max_new_tokens:
+        return False
+    if not new_token_ids:
+        return False
+    return int(new_token_ids[-1]) not in set(int(s) for s in stop_ids)
 
 
 class LLMBackend(ABC):
@@ -140,6 +158,43 @@ class LLMBackend(ABC):
 
 # ── HuggingFace Transformers Backend ───────────────────────────────────────
 
+
+def select_bnb_compute_dtype(on_cuda: bool) -> str:
+    """Requested bitsandbytes compute dtype for a device.
+
+    CUDA (the research setting, incl. Tesla T4): float16, as in configs/phase1.yaml.
+    No CUDA (allow_cpu smoke path only): float32, because float16 matmul is not usable
+    on CPU. Whether CUDA is present decides this, not allow_cpu.
+    """
+    return "float16" if on_cuda else "float32"
+
+
+def set_bnb_compute_dtype_in_config(config, dtype_name: str) -> bool:
+    """Set bnb_4bit_compute_dtype in a model config's quantization_config.
+
+    Returns True if the config carried a quantization_config (and was updated).
+    Works for both the dict form (as loaded from config.json) and the object form.
+    """
+    qc = getattr(config, "quantization_config", None)
+    if qc is None:
+        return False
+    if isinstance(qc, dict):
+        qc["bnb_4bit_compute_dtype"] = dtype_name
+    else:
+        setattr(qc, "bnb_4bit_compute_dtype", dtype_name)
+    return True
+
+
+def actual_bnb_compute_dtype(model) -> Optional[str]:
+    """Compute dtype (e.g. 'float16') used by the model's bitsandbytes 4-bit layers.
+
+    Returns None if the model has no Linear4bit layers.
+    """
+    for module in model.modules():
+        if type(module).__name__ == "Linear4bit" and hasattr(module, "compute_dtype"):
+            return str(module.compute_dtype).replace("torch.", "")
+    return None
+
 class HFBackend(LLMBackend):
     """HuggingFace Transformers backend with NF4 4-bit quantisation.
 
@@ -152,12 +207,22 @@ class HFBackend(LLMBackend):
 
     def __init__(self, model_id: str, context_limit_tokens: int = 8192,
                  seed: int = 42, stop_tokens: Optional[List[str]] = None,
-                 template_mode: str = "system"):
+                 template_mode: str = "system",
+                 tokenize_special_tokens: bool = True,
+                 allow_cpu: bool = False):
         self.model_id = model_id
+        # Explicit opt-in (run_experiment --allow-cpu) for smoke tests only. The default
+        # refuses to run without CUDA, so a CPU run can never happen silently.
+        self.allow_cpu = allow_cpu
+        self._compute_dtype_name = "float16"
         self._context_limit = context_limit_tokens
         self.seed = seed
         self.stop_token_names = stop_tokens or []
         self.template_mode = template_mode
+        # True (default, unchanged behaviour for existing models) lets the tokenizer
+        # add BOS/special tokens on top of the chat-template string. Set False for
+        # models whose chat template already emits BOS, to avoid a duplicate BOS.
+        self.tokenize_special_tokens = tokenize_special_tokens
         self.model = None
         self.tokenizer = None
         self.model_revision: Optional[str] = None
@@ -166,16 +231,23 @@ class HFBackend(LLMBackend):
     def load(self) -> None:
         """Load model with NF4 4-bit quantisation."""
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+        from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
         from huggingface_hub import model_info
 
-        if not torch.cuda.is_available():
+        on_cuda = torch.cuda.is_available()
+        if not on_cuda and not self.allow_cpu:
             raise RuntimeError(
                 "No CUDA GPU detected. NF4 quantisation requires CUDA.\n"
                 "To test on CPU without a GPU:\n"
                 "  1. Use --backend mock for fast local verification\n"
                 "  2. Or use API models: --models gemini-1.5-flash (with GEMINI_API_KEY)\n"
+                "  3. Or, for a SMOKE TEST ONLY, add --allow-cpu (very slow; not a research run)\n"
                 "See README.md for details."
+            )
+        if not on_cuda:
+            logger.warning(
+                "CPU smoke mode (--allow-cpu): NF4 weights on CPU, float32 compute. "
+                "Outputs are NOT comparable to the CUDA float16 setting."
             )
 
         hf_token = os.environ.get("HF_TOKEN")
@@ -194,9 +266,13 @@ class HFBackend(LLMBackend):
             logger.warning(f"Could not resolve model revision: {e}")
             self.model_revision = "unknown"
 
+        # CUDA (research setting): float16 compute. CPU smoke mode: float32 compute
+        # (float16 matmul is not usable on CPU).
+        self._compute_dtype_name = select_bnb_compute_dtype(on_cuda)
+        compute_dtype = getattr(torch, self._compute_dtype_name)
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_compute_dtype=compute_dtype,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4",
         )
@@ -209,16 +285,36 @@ class HFBackend(LLMBackend):
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
         logger.info(f"Loading model {self.model_id} with NF4 4-bit...")
+        # A pre-quantised checkpoint ships its own quantization_config (bnb_4bit_compute_dtype
+        # bfloat16), which transformers uses in preference to the bnb_config passed above.
+        # Set the compute dtype in the config too, so the requested dtype is the one in use.
+        model_config = AutoConfig.from_pretrained(
+            self.model_id, token=hf_token, trust_remote_code=False
+        )
+        set_bnb_compute_dtype_in_config(model_config, self._compute_dtype_name)
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_id,
+            config=model_config,
             quantization_config=bnb_config,
-            device_map="auto",
+            device_map="auto" if on_cuda else "cpu",
             token=hf_token,
             trust_remote_code=False,
         )
         self.model.eval()
 
-        self._device_name = torch.cuda.get_device_name(0)
+        # Record the compute dtype actually in use (not the requested one) and fail loudly
+        # on a mismatch: a silent fallback to bfloat16 is exactly what this guards against.
+        actual = actual_bnb_compute_dtype(self.model)
+        if actual is None:
+            raise RuntimeError("No bitsandbytes Linear4bit layers found; NF4 load failed.")
+        if actual != self._compute_dtype_name:
+            raise RuntimeError(
+                f"Requested bnb compute dtype {self._compute_dtype_name} but the model is "
+                f"using {actual}. Refusing to run with a different numeric setting."
+            )
+        self._compute_dtype_name = actual
+
+        self._device_name = torch.cuda.get_device_name(0) if on_cuda else "cpu (smoke only)"
         logger.info(f"Model loaded on {self._device_name}")
 
     def count_tokens(self, messages: List[Dict[str, str]]) -> int:
@@ -228,6 +324,14 @@ class HFBackend(LLMBackend):
         )
         token_ids = self.tokenizer.encode(formatted, add_special_tokens=False)
         return len(token_ids)
+
+    def encode_formatted(self, formatted: str):
+        """Tokenize a chat-template string. Honours tokenize_special_tokens."""
+        return self.tokenizer(
+            formatted,
+            add_special_tokens=self.tokenize_special_tokens,
+            return_tensors="pt",
+        )
 
     def generate(self, messages: List[Dict[str, str]], max_new_tokens: int) -> GenResult:
         """Greedy generation. Seeds torch before each call for determinism."""
@@ -241,7 +345,7 @@ class HFBackend(LLMBackend):
         formatted = self.tokenizer.apply_chat_template(
             messages, tokenize=False, add_generation_prompt=True
         )
-        inputs = self.tokenizer(formatted, return_tensors="pt").to(self.model.device)
+        inputs = self.encode_formatted(formatted).to(self.model.device)
         prompt_tokens = inputs["input_ids"].shape[1]
 
         # Build stop token IDs
@@ -265,12 +369,16 @@ class HFBackend(LLMBackend):
         new_token_ids = outputs[0][prompt_tokens:]
         new_tokens = len(new_token_ids)
         text = self.tokenizer.decode(new_token_ids, skip_special_tokens=True).strip()
+        generation_truncated = detect_generation_truncated(
+            new_token_ids.tolist(), max_new_tokens, stop_ids
+        )
 
         return GenResult(
             text=text,
             prompt_tokens=prompt_tokens,
             new_tokens=new_tokens,
             latency_s=latency,
+            generation_truncated=generation_truncated,
         )
 
     @property
@@ -279,10 +387,11 @@ class HFBackend(LLMBackend):
             "model_id": self.model_id,
             "model_revision": self.model_revision,
             "quantisation": "nf4_4bit",
-            "dtype": "float16",
+            "dtype": self._compute_dtype_name,
             "device": self._device_name or "unknown",
             "backend": "hf",
             "template_mode": self.template_mode,
+            "tokenize_special_tokens": self.tokenize_special_tokens,
         }
         try:
             import torch
@@ -779,6 +888,8 @@ def create_backend(
     template_mode: Optional[str] = None,
     seed: int = 42,
     stop_tokens: Optional[List[str]] = None,
+    tokenize_special_tokens: bool = True,
+    allow_cpu: bool = False,
     **kwargs,
 ) -> LLMBackend:
     """Factory function to instantiate the appropriate LLM backend.
@@ -843,6 +954,8 @@ def create_backend(
             seed=seed,
             stop_tokens=stop_tokens or [],
             template_mode=template_mode or "system",
+            tokenize_special_tokens=tokenize_special_tokens,
+            allow_cpu=allow_cpu,
         )
     else:
         raise ValueError(

@@ -21,6 +21,23 @@ models:
     bnb_4bit_quant_type: "nf4"
     stop_tokens: ["<|eot_id|>"]
     template_mode: "system"  # LLaMA-3 supports system role
+    # Llama-3 chat template already emits <|begin_of_text|>; default tokenisation would add
+    # a second BOS (verified on the cached Llama-3.1-8B-Instruct tokenizer, same template family).
+    tokenize_special_tokens: false
+  # Experiment layer: experiments/llama3/ (see its README). Same shared pipeline as
+  # the other entries; only the backend model differs. Added as a new key so no
+  # existing entry changes. Not the paper's 8B model: see experiments/llama3/README.md.
+  llama3.2-3b:
+    backend: "hf"
+    model_id: "unsloth/Llama-3.2-3B-Instruct-bnb-4bit"  # pre-quantised bnb-4bit checkpoint, public
+    context_limit: 8192   # matched to the paper's LLaMA-3 arm (checked against real prompt lengths in the smoke run)
+    quantisation: "nf4"   # checkpoint is already NF4 (bnb); see README for the loading caveat
+    bnb_4bit_compute_dtype: "float16"
+    bnb_4bit_use_double_quant: true
+    bnb_4bit_quant_type: "nf4"
+    stop_tokens: ["<|eot_id|>"]
+    template_mode: "system"
+    tokenize_special_tokens: false  # Llama-3 chat template already emits <|begin_of_text|>
   biomistral:
     model_id: "BioMistral/BioMistral-7B"
     context_limit: 2048
@@ -93,12 +110,24 @@ strategies:
     type: "rag"
     k: 20             # top-k retrieval candidates
     per_query_m: 30   # per-query top-m before merge
+  kg:
+    # HYBRID: semantic seeds (same index as rag) + official ICD-10-CM hierarchy expansion.
+    type: "kg"
+    k: 20             # candidate pool size, same as rag, so only the candidate set differs
+    seed_k: 10        # top semantic seeds that get expanded
+    max_children: 5   # direct children taken per seed (XML order); parent always added
 
 # --- Decoding ---
 decoding:
   do_sample: false
   max_new_tokens: 256
   batch_size: 1
+
+# --- Knowledge graph (official ICD-10-CM 2024 tabular hierarchy) ---
+# Build with: python src/kg.py build --zip data/raw/icd10cm-Table-and-Index-2024.zip
+#             --xml data/raw/icd10cm_tabular_2024.xml --out data/kg/icd10cm_2024_hierarchy.jsonl
+kg:
+  hierarchy_path: "data/kg/icd10cm_2024_hierarchy.jsonl"
 
 # --- Retrieval ---
 retrieval:

@@ -7,7 +7,7 @@ import re
 
 # Well-formed ICD-10-CM pattern per the paper's specification.
 # Letter (A-T, V-Z) + 2 digits/AB + optional dot + 1-4 alphanumeric chars.
-WELL_FORMED_PATTERN = re.compile(r'^[A-TV-Z][0-9][0-9AB](\.[0-9A-TV-Z]{1,4})?$')
+WELL_FORMED_PATTERN = re.compile(r'^[A-TV-Z][0-9][0-9A-Z](\.[0-9A-Z]{1,4})?$')
 
 
 def normalize(s: str) -> str:
